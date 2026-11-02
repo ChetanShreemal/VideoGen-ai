@@ -14,3 +14,23 @@ export const readinessResponseSchema = z.object({
 });
 
 export type ReadinessResponse = z.infer<typeof readinessResponseSchema>;
+
+export const currentUserResponseSchema = z.object({
+  data: z.object({
+    user: z.object({
+      id: z.string(),
+      name: z.string(),
+      email: z.email(),
+      emailVerified: z.boolean(),
+    }),
+  }),
+});
+
+export type CurrentUserResponse = z.infer<typeof currentUserResponseSchema>;
+
+export const unauthenticatedResponseSchema = z.object({
+  error: z.object({
+    code: z.literal("UNAUTHENTICATED"),
+    message: z.string(),
+  }),
+});

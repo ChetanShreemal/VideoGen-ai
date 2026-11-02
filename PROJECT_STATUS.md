@@ -19,12 +19,12 @@
 | Field | Current status |
 |---|---|
 | Product | AI VideoGen: creator-focused AI-assisted video creation web app |
-| Current phase | Phase A — Foundation (scaffold, build and API health verified; authentication and project persistence remain unimplemented) |
-| Application implementation | Starter web app and sign-in mock; API now has MongoDB connection lifecycle and separate readiness endpoint. Project persistence and real authentication are not implemented |
+| Current phase | Phase A — Foundation (scaffold, MongoDB readiness, and first email/password authentication slice implemented; project persistence remains unimplemented) |
+| Application implementation | Next.js sign-in/sign-up UI is connected to Better Auth; API uses MongoDB-backed sessions and exposes `/api/v1/me`. Project persistence and authenticated project routes are not implemented |
 | Design | Google Stitch project exists and has been iterated; latest full-project QA is incomplete |
 | Requirements and technical specs | PRD, System Design, and API Design exist as review drafts in `C:\Users\Chetan\Downloads`; they are not yet in this repository |
 | Repository contents | Initial scaffold and design/status docs committed as `8090b62`; `main` is stable and ongoing work is on `dev`, tracking `origin/dev` |
-| Immediate priority | Settle the authentication adapter/session contract before implementing project persistence; MongoDB Atlas connectivity is now verified |
+| Immediate priority | Decide email verification and production recovery policy; then implement authenticated project CRUD with owner-scoped access |
 
 ## Product and architecture baseline
 
@@ -34,7 +34,7 @@ These are the current documented preferences, not all final implementation appro
 |---|---|---|
 | Web frontend | Next.js + TypeScript | Preferred in PRD; proposed in System Design |
 | Backend/API | Node.js + TypeScript modular monolith; REST under `/api/v1`; Zod validation | Proposed; implementation not started |
-| Authentication | Better Auth | Preferred in PRD; recommended in System Design; auth methods/configuration remain open |
+| Authentication | Better Auth with email/password for the first slice | Implemented locally; Google sign-in, email verification and delivery-backed recovery remain open |
 | Database | MongoDB Atlas | Preferred/proposed |
 | Media storage | Private Cloudflare R2 objects; metadata in MongoDB | Preferred/proposed |
 | Background jobs | Inngest | Preferred in PRD; recommended/pending confirmation in System Design/API Design |
@@ -72,7 +72,7 @@ Update each row as work changes. Add links to PRs, commits, screenshots, test re
 | UX-09 | Complete remaining screen-by-screen PRD coverage review | Not started | Previous QA notes exist in chat, but latest full inventory is not verified | Compare every screen and state to PRD/API flows; log each result below |
 | UX-10 | Verify responsive designs device-by-device | Needs verification | Responsive design was requested earlier; latest viewport/frame coverage could not be confirmed | Check phone, tablet and desktop layouts and record dimensions/results |
 | UX-11 | Verify dark/light themes, Roboto and VideoGen brand consistency | Needs verification | Design intent is dark + light support, Roboto, orange accent; latest global coverage is not fully verified | Inspect representative screens in both themes and record exceptions |
-| UX-12 | Verify authentication screen coverage | Needs verification | Provider-neutral sign-in design mock now exists in the web starter; no auth provider is selected and no other auth screens are implemented | Review this sign-in mock, then define the next auth slice and provider-specific states |
+| UX-12 | Verify authentication screen coverage | Partial | Sign-in and sign-up are implemented; recovery notice explains that email delivery is not configured. Provider-backed recovery/verification and visual browser QA remain unverified | Review auth screens in browser and decide email verification/recovery policy |
 
 ### C. Architecture and API
 
@@ -82,7 +82,7 @@ Update each row as work changes. Add links to PRs, commits, screenshots, test re
 | ARCH-02 | Review API Design | Done | Read current API contract draft in Downloads on 2026-11-02 | Add it to repository as a review draft |
 | ARCH-03 | Confirm topology and deployment boundaries | Decision needed | System Design recommends modular API plus separate async workers; deployment details remain open | Approve web/API/worker hosting and environment boundaries |
 | ARCH-04 | Define MongoDB models, indexes and ownership rules | In progress | [`docs/DATABASE_API_FOUNDATION.md`](docs/DATABASE_API_FOUNDATION.md) proposes workspace-scoped collections, indexes and access invariants; shared driver/config/readiness are implemented; no models or migrations exist yet | Review proposed models; resolve retention and idempotency policies before creating indexes or collections |
-| ARCH-05 | Define first project API slice and shared request/response schemas | In progress | Foundation proposal outlines authenticated project CRUD/archive/restore contracts; no OpenAPI or project schemas implemented | Confirm auth/session contract, then add OpenAPI 3.1 and synchronized Zod schemas |
+| ARCH-05 | Define first project API slice and shared request/response schemas | In progress | Better Auth session contract is implemented at `/api/v1/auth/*`; `/api/v1/me` returns the authenticated user. Foundation proposal outlines project CRUD/archive/restore; no project routes or schemas implemented | Add OpenAPI 3.1 and synchronized Zod schemas for owner-scoped project CRUD |
 | ARCH-06 | Define job and publishing state machines | In progress | Draft states and transitions exist in API/System Design | Reconcile and approve stages, retry/cancel and uncertain publish handling |
 
 ### D. Foundation scaffold
@@ -99,6 +99,16 @@ Update each row as work changes. Add links to PRs, commits, screenshots, test re
 | DBF-01 | Add managed MongoDB client package and validated API configuration | Done (implementation only) | `packages/database` wraps one MongoDB client per API process; API config validates URI/database name without echoing values | Add index bootstrap only with approved model/index definitions |
 | DBF-02 | Separate API liveness from MongoDB readiness and close the client on shutdown | Done | `GET /api/v1/health` is process liveness; `GET /api/v1/ready` pings MongoDB and returns a generic `503` when unavailable; Fastify close hook closes the client | None |
 | DBF-03 | Close Fastify and the MongoDB client on process termination | Done (implementation only) | `SIGINT` and `SIGTERM` now call `app.close()`; Fastify's `onClose` hook closes the database client | Runtime signal-shutdown verification remains not run |
+
+### DBF. Authentication foundation
+
+| ID | Work item | Status | Completion / verification evidence | Next action |
+|---|---|---|---|---|
+| AUTH-01 | Add Better Auth backed by the existing MongoDB client | Done | `apps/api/src/auth.ts` uses the shared MongoDB client and Better Auth MongoDB adapter; API builds and live auth requests passed | Decide email verification before production signup |
+| AUTH-02 | Mount auth endpoints with credentialed CORS and cookie forwarding | Done | Fastify forwards Better Auth GET/POST requests and multi-value `Set-Cookie`; live signup, sign-in and sign-out passed | Add CSRF/origin and cookie behavior coverage to the auth acceptance suite |
+| AUTH-03 | Add authenticated current-user endpoint | Done | `/api/v1/me` returns 401 without session and returns minimal user profile with valid session | Reuse this session contract for all future protected routes |
+| AUTH-04 | Connect sign-in/sign-up UI to real auth client | Done (implementation only) | `apps/web/src/app/page.tsx` and `src/lib/auth-client.ts` implement email/password sign-in, sign-up and sign-out states | Browser QA loading, error, expired-session and responsive states |
+| AUTH-05 | Provide password reset and verified-email flows | Deferred | No email delivery provider or policy has been selected; UI explains recovery is unavailable | Select mail provider and verification policy before public launch |
 
 ### E1. First design-led implementation slice — sign-in mock
 
@@ -136,7 +146,7 @@ This is the persistent test-case register. Update **Status**, **Actual result / 
 | T-008 | Screen inventory vs PRD: map each required journey/state to a Stitch frame | All required screens/states are accounted for, or gaps are listed | Not run | Full current canvas could not be reliably inventoried; browser connection timed out | — |
 | T-009 | Responsive layout: inspect primary flows at phone, tablet, and desktop sizes | No clipping/overlap; navigation, forms, scene cards, preview and actions usable at each target size | Not run | No reliable device-by-device evidence recorded | — |
 | T-010 | Theme and brand: inspect representative screens in light/dark modes, typography and logo | Both themes are coherent; Roboto and VideoGen branding consistent; contrast/focus states usable | Not run | Latest full-project coverage not verified | — |
-| T-011 | Authentication UI: inspect sign-in, signup, recovery/reset, validation, loading and error states | Screens and transitions match the selected auth method; errors are clear and do not disclose account existence | Not run | Auth methods/provider remain undecided; no runtime application exists | — |
+| T-011 | Authentication UI: inspect sign-in, signup, recovery/reset, validation, loading and error states | Screens and transitions match the selected auth method; errors are clear and do not disclose account existence | Partial | API flows are covered in T-031–T-034; visual browser review and provider-backed recovery/reset are not covered | 2026-11-02 |
 | T-012 | Project authorization (future API test): user A attempts to read/update user B’s project by changing IDs | Request is rejected without revealing private project metadata | Not run | API only has a health endpoint; project authorization is not implemented | — |
 | T-013 | Project CRUD (future UI/API test): create, list, open, rename, archive and resume an owned project | Changes persist; listing is owner-scoped; resumable project state is retained | Not run | Web/API scaffolds exist; project CRUD and persistence are not implemented | — |
 | T-014 | Storyboard revision (future UI/API test): edit one scene, save, reload and inspect other scenes | Edited scene persists; unaffected approved scenes remain unchanged; revision conflicts are handled | Not run | No storyboard workflow or persistence is implemented | — |
@@ -158,6 +168,11 @@ This is the persistent test-case register. Update **Status**, **Actual result / 
 | T-028 | Start the TypeScript API development watcher in the current Windows environment | API watcher starts and serves health/readiness routes | Blocked (environment) | Both `npm run dev:api` and direct `tsx` startup hit `spawn EPERM` in the esbuild/Node watch child process. The compiled API launched with Node and served the checked endpoints. Retry the watcher outside this restricted environment | 2026-11-02 |
 | T-029 | Send `SIGINT` and `SIGTERM` to a running compiled API process | Each signal closes Fastify, runs `onClose`, and closes MongoDB without a forced exit | Not run | Shutdown handlers were added; runtime signal delivery/cleanup has not been verified | — |
 | T-030 | Resolve Atlas SRV records and verify a live MongoDB ping from the API | API readiness reports `ready` and MongoDB is connected | Passed | Default Node SRV resolution returned `ECONNREFUSED`; Windows DNS lookup and Node SRV/TXT queries through Google DNS succeeded. Added optional `MONGODB_DNS_SERVERS`, configured locally as `8.8.8.8,8.8.4.4`; compiled API then returned `/api/v1/ready` HTTP 200 with `database: connected` and `/api/v1/health` HTTP 200 | 2026-11-02 |
+| T-031 | Unauthenticated current-user request | `/api/v1/me` responds 401 with the shared unauthenticated response | Passed | Live API returned 401 when no session cookie was supplied | 2026-11-02 |
+| T-032 | Create a user with email and password | Signup succeeds and creates a MongoDB-backed user; temporary test data is removed | Passed | Live API signup returned HTTP 200; disposable test account count verified as zero after cleanup | 2026-11-02 |
+| T-033 | Sign in and read current user using returned cookie | Sign-in returns a session cookie and `/api/v1/me` returns that user's identity | Passed | Live API sign-in succeeded and `/api/v1/me` returned the matching temporary identity; test data removed | 2026-11-02 |
+| T-034 | Sign out and reuse the old session cookie | Sign-out succeeds and the old cookie no longer authenticates `/api/v1/me` | Passed | Live API sign-out succeeded; the revoked cookie then received 401 from `/api/v1/me` | 2026-11-02 |
+| T-035 | API and web static verification | API/web TypeScript checks and API build pass; web production build completes | Partial | API and web typechecks passed and API build passed. Next web production build compiled, then Windows process launch failed with `spawn EPERM` during its TypeScript phase; no build success claimed | 2026-11-02 |
 
 ### Test execution update log
 
@@ -167,12 +182,13 @@ This is the persistent test-case register. Update **Status**, **Actual result / 
 | 2026-11-02 | T-025–T-028, DB-01–DB-03, PRJ-01–PRJ-07, JOB-01 | Reviewed PRD/System/API drafts; implemented MongoDB client package, Atlas-backed local config, liveness/readiness split and graceful client shutdown; type-check passed; manually verified liveness/readiness failure behavior | SRV DNS resolution is refused in this environment, so Atlas was not reached. Retry from a network that permits DNS SRV; project CRUD also awaits the auth session contract. TypeScript watch startup is blocked by this environment's child-process restriction |
 | 2026-11-02 | DBF-03, T-029 | Added process signal handlers that close Fastify on `SIGINT`/`SIGTERM`, invoking the existing MongoDB client cleanup hook | Type-check before commit; runtime signal-shutdown case T-029 remains not run |
 | 2026-11-02 | DBF-02, T-030 | Diagnosed Node SRV lookup refusal as resolver-specific; added optional API-level `MONGODB_DNS_SERVERS` override and configured the local ignored `.env` to use Google DNS. Type-check and API build passed; live Atlas ping passed and readiness returned 200 | Keep the DNS override only where the system resolver refuses SRV queries; continue with authentication/session contract |
+| 2026-11-02 | AUTH-01–AUTH-05, T-011, T-031–T-035 | Implemented Better Auth email/password signup/sign-in/sign-out on MongoDB sessions, credentialed auth endpoint forwarding, `/api/v1/me`, and connected web auth UI. API and web typechecks plus API build passed. Live unauthenticated, signup, sign-in/profile and sign-out/revocation checks passed; temporary test data cleanup verified | Next build compiled but ended with Windows `spawn EPERM` in its TypeScript phase. Google OAuth, email verification and password recovery await policy/provider decisions; browser visual QA remains. Proceed to project CRUD slice after those decisions |
 
 ## Decision register
 
 | Decision | Current state | Owner / next action |
 |---|---|---|
-| Auth methods and signup policy | Open; Better Auth is preferred/recommended | Decide email/password, Google, verification and admin-access rules |
+| Auth methods and signup policy | First slice uses public email/password signup; Better Auth is implemented. Google OAuth, verification, recovery delivery and admin-access policy remain open | Decide whether to require email verification and select an email provider before public launch |
 | Visual generation provider(s) | Open / not selected | Evaluate provider capability, quality, licensing, latency and cost |
 | Animation model | Open | Decide animated images/motion graphics, generated video clips, or both; define lip-sync scope |
 | Duration presets | Conflicting/open notes (30/60/90 vs earlier ranges) | Confirm V1 options and duration tolerance |
@@ -199,7 +215,7 @@ This is the persistent test-case register. Update **Status**, **Actual result / 
 
 | Date | Work completed | Checks performed | Remaining / next starting task |
 |---|---|---|---|
-| 2026-11-02 | Inspected repository/specs; created tracker; scaffolded npm workspaces, web/API shells, shared health contract, and stepwise README; built responsive provider-neutral sign-in mock and acceptance cases; fixed tablet layout breakpoint | Dependency install, type-check and final production build passed; Next required its same-version WebAssembly compiler locally because native Windows SWC could not load. API health returned the expected JSON. Browser validation passed for blank/one-field, malformed email and password visibility. Responsive QA passed at 1440px, 768px and 375px; changed 768px from two-column to one-column. Temporary QA harness removed | Review the sign-in mock; settle auth method/provider and session requirements before the authentication implementation slice |
+| 2026-11-02 | Inspected repository/specs; scaffolded npm workspaces, web/API shells and health contract; built responsive sign-in mock; added MongoDB readiness and implemented the first Better Auth email/password slice with sign-in, signup, sign-out and `/api/v1/me` | Typechecks, API build, readiness, unauthenticated 401, signup, sign-in/profile, sign-out/revocation passed; disposable test data cleanup confirmed. Web production build compiled but Next's TypeScript phase was blocked by Windows `spawn EPERM`. Earlier mock browser tests passed at 1440px, 768px and 375px; auth UI visual browser QA still pending | Decide verification and recovery email policy; visually review auth UI; then implement owner-scoped project CRUD |
 
 ## Update rules for future sessions
 

@@ -7,14 +7,21 @@ export interface MongoDatabaseOptions {
 }
 
 export class MongoDatabase {
-  private client: MongoClient | undefined;
-  private db: Db | undefined;
+  private readonly client: MongoClient;
+  private readonly db: Db;
+  private connected = false;
   private connecting: Promise<void> | undefined;
 
-  constructor(private readonly options: MongoDatabaseOptions) {}
+  constructor(private readonly options: MongoDatabaseOptions) {
+    this.client = new MongoClient(options.uri, {
+      appName: "videogen-api",
+      serverSelectionTimeoutMS: options.serverSelectionTimeoutMS ?? 3_000,
+    });
+    this.db = this.client.db(options.databaseName);
+  }
 
   async connect(): Promise<void> {
-    if (this.db) return;
+    if (this.connected) return;
     if (this.connecting) return this.connecting;
 
     this.connecting = this.openConnection().finally(() => {
@@ -26,38 +33,25 @@ export class MongoDatabase {
 
   async ping(): Promise<void> {
     await this.connect();
-    await this.db?.command({ ping: 1 });
+    await this.db.command({ ping: 1 });
   }
 
   database(): Db {
-    if (!this.db) {
-      throw new Error("MongoDB is not connected.");
-    }
     return this.db;
   }
 
+  clientHandle(): MongoClient {
+    return this.client;
+  }
+
   async close(): Promise<void> {
-    const client = this.client;
-    this.client = undefined;
-    this.db = undefined;
-    await client?.close();
+    await this.client.close();
+    this.connected = false;
   }
 
   private async openConnection(): Promise<void> {
-    const client = new MongoClient(this.options.uri, {
-      appName: "videogen-api",
-      serverSelectionTimeoutMS: this.options.serverSelectionTimeoutMS ?? 3_000,
-    });
-
-    try {
-      await client.connect();
-      const db = client.db(this.options.databaseName);
-      await db.command({ ping: 1 });
-      this.client = client;
-      this.db = db;
-    } catch (error) {
-      await client.close().catch(() => undefined);
-      throw error;
-    }
+    await this.client.connect();
+    await this.db.command({ ping: 1 });
+    this.connected = true;
   }
 }

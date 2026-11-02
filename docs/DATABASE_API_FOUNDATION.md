@@ -1,26 +1,27 @@
 # MongoDB and API Foundation — Design Proposal
 
-**Status:** Draft for review; not yet implemented  
-**Scope:** Phase A database/API foundation and the first persistent feature slice  
+**Status:** Foundation implementation in progress; project API remains design-only
+**Scope:** Phase A database/API foundation and the first persistent feature slice
 **Sources:** `PRD.md`, `SYSTEM_DESIGN.md`, and `API_DESIGN.md` review drafts in `C:\Users\Chetan\Downloads`, read 2026-11-02.
 
 ## 1. Goal and implementation order
 
 Establish a safe, testable MongoDB boundary before adding generation or media providers. The first persistent feature is **Projects**: create, list, read, update, archive, and restore an authenticated user's own projects.
 
-1. Decide the remaining contract questions listed below.
-2. Add a shared MongoDB package with validated configuration, one managed client per process, typed collection access, index creation, and graceful shutdown.
-3. Add database readiness to the API health surface; keep liveness independent of MongoDB.
-4. Add project contracts, repository, service, and REST handlers with workspace-scoped authorization.
+1. Configure the development Atlas cluster using the root `.env` file, excluded by `.gitignore`; keep the connection string out of source control.
+2. Add a shared MongoDB package with one managed client per process and graceful shutdown. **Implemented; type-check passed.**
+3. Add database readiness to the API health surface; keep liveness independent of MongoDB. **Implemented; live connectivity not verified.**
+4. Add project contracts, repository, service, and REST handlers with workspace-scoped authorization. **Not started; auth/session contract remains a prerequisite.**
 5. Add the project API contract to OpenAPI and the test register; verify isolation and persistence against a local MongoDB replica set or Atlas test database.
 
-No database credentials, paid integrations, or production migration are part of this design-only slice.
+The local Atlas URI is excluded from Git. No production credentials, paid integrations, or production migration are part of this slice.
 
 ## 2. Decisions from the source documents
 
 | Area | Foundation proposal | Basis / status |
 |---|---|---|
 | Database | MongoDB Atlas in deployed environments; local MongoDB replica set for development and integration tests | Confirmed preferred technology in PRD; deployment details remain to be configured |
+| Current development database | User-provided Atlas cluster, database name `videogen_dev`; URI is in ignored local `.env` only | Configured locally; connection has not been tested |
 | API | Fastify modular monolith, TypeScript, `/api/v1`, Zod boundary validation | Current scaffold and API/System Design proposals |
 | Identity boundary | One private personal workspace per registered user in V1. Derive `workspaceId` from the authenticated server session; never accept it as authorization from request data. | PRD §13.1 |
 | Database IDs | MongoDB `ObjectId` internally, serialized as opaque hex strings at the API edge | Consistent with API draft; avoids mixed ID conventions |
@@ -83,7 +84,7 @@ Project response fields: `id`, `title`, `topic?`, `settings`, `status`, `revisio
 ## 6. Open decisions before implementation
 
 1. Confirm Better Auth MongoDB adapter/version and exact signup methods, verification, and session policy. Until then, no user-facing project route can safely be treated as authenticated.
-2. Confirm local MongoDB development mechanism (Docker replica set vs Atlas development cluster) and secret management. Do not commit real connection strings.
+2. Local development uses the supplied Atlas cluster for now. Decide whether to add a Docker replica-set fallback; do not commit real connection strings.
 3. Reconcile the spec header's “duration/aspect ratios open” note with the body decisions for 30/60/90 seconds and 9:16, 16:9, 1:1 before freezing `settings` enums.
 4. Decide project archive/resume semantics, hard-delete/data-export policy, and retention periods before TTL indexes or cleanup workers are introduced.
 5. Set idempotency retention, usage/audit retention, and job progress detail limits before TTL indexes or unbounded history are introduced.

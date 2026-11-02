@@ -4,17 +4,19 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "predev": "npm run build --workspace @videogen/contracts",
-    "dev": "tsx watch src/server.ts",
-    "prebuild": "npm run build --workspace @videogen/contracts",
+    "predev": "npm run build --workspace @videogen/contracts && npm run build --workspace @videogen/database",
+    "dev": "node --env-file=../../.env --import tsx --watch src/server.ts",
+    "prebuild": "npm run build --workspace @videogen/contracts && npm run build --workspace @videogen/database",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
-    "pretypecheck": "npm run build --workspace @videogen/contracts",
+    "pretypecheck": "npm run build --workspace @videogen/contracts && npm run build --workspace @videogen/database",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@videogen/contracts": "0.1.0",
-    "fastify": "^5.5.0"
+    "@videogen/database": "0.1.0",
+    "fastify": "^5.5.0",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@types/node": "^22.19.0",

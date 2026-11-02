@@ -20,11 +20,11 @@
 |---|---|
 | Product | AI VideoGen: creator-focused AI-assisted video creation web app |
 | Current phase | Phase A — Foundation (scaffold, build and API health verified; authentication and project persistence remain unimplemented) |
-| Application implementation | Starter web app, health-only API and shared contract package scaffolded; first provider-neutral sign-in UI mock added, with no real authentication integration |
+| Application implementation | Starter web app and sign-in mock; API now has MongoDB connection lifecycle and separate readiness endpoint. Project persistence and real authentication are not implemented |
 | Design | Google Stitch project exists and has been iterated; latest full-project QA is incomplete |
 | Requirements and technical specs | PRD, System Design, and API Design exist as review drafts in `C:\Users\Chetan\Downloads`; they are not yet in this repository |
 | Repository contents | Initial scaffold and design/status docs committed as `8090b62`; `main` is stable and ongoing work is on `dev`, tracking `origin/dev` |
-| Immediate priority | Review the MongoDB/API foundation proposal; settle the authentication adapter and local database setup before implementing persistence |
+| Immediate priority | Verify Atlas connectivity and readiness behavior; settle the authentication adapter/session contract before implementing project persistence |
 
 ## Product and architecture baseline
 
@@ -81,7 +81,7 @@ Update each row as work changes. Add links to PRs, commits, screenshots, test re
 | ARCH-01 | Review System Design | Done | Read current proposal in Downloads on 2026-11-02 | Add it to repository as a review draft |
 | ARCH-02 | Review API Design | Done | Read current API contract draft in Downloads on 2026-11-02 | Add it to repository as a review draft |
 | ARCH-03 | Confirm topology and deployment boundaries | Decision needed | System Design recommends modular API plus separate async workers; deployment details remain open | Approve web/API/worker hosting and environment boundaries |
-| ARCH-04 | Define MongoDB models, indexes and ownership rules | In progress | [`docs/DATABASE_API_FOUNDATION.md`](docs/DATABASE_API_FOUNDATION.md) proposes workspace-scoped collections, indexes and access invariants; no models or migrations implemented | Review proposed design; resolve retention, idempotency and local database setup before implementation |
+| ARCH-04 | Define MongoDB models, indexes and ownership rules | In progress | [`docs/DATABASE_API_FOUNDATION.md`](docs/DATABASE_API_FOUNDATION.md) proposes workspace-scoped collections, indexes and access invariants; shared driver/config/readiness are implemented; no models or migrations exist yet | Review proposed models; resolve retention and idempotency policies before creating indexes or collections |
 | ARCH-05 | Define first project API slice and shared request/response schemas | In progress | Foundation proposal outlines authenticated project CRUD/archive/restore contracts; no OpenAPI or project schemas implemented | Confirm auth/session contract, then add OpenAPI 3.1 and synchronized Zod schemas |
 | ARCH-06 | Define job and publishing state machines | In progress | Draft states and transitions exist in API/System Design | Reconcile and approve stages, retry/cancel and uncertain publish handling |
 
@@ -96,6 +96,8 @@ Update each row as work changes. Add links to PRs, commits, screenshots, test re
 | SCAFF-05 | Add stepwise roadmap and local run instructions | Done (files created) | Root `README.md` lists sequential feature steps and commands | Keep roadmap aligned with approved decisions |
 | SCAFF-06 | Install dependencies / generate lockfile | Done | `npm install --no-audit --no-fund` completed successfully and generated root `package-lock.json` | Keep lockfile committed with workspace changes |
 | SCAFF-07 | Build and type-check scaffold | Done (with local compiler workaround) | `npm run typecheck` passed; `npm run build` passed all workspaces after using Next.js's matching WebAssembly compiler because the installed Windows SWC binary could not load | Keep the compiler workaround local; resolve native SWC issue if it recurs on this machine |
+| DBF-01 | Add managed MongoDB client package and validated API configuration | Done (implementation only) | `packages/database` wraps one MongoDB client per API process; API config validates URI/database name without echoing values | Add index bootstrap only with approved model/index definitions |
+| DBF-02 | Separate API liveness from MongoDB readiness and close the client on shutdown | Done (implementation only) | `GET /api/v1/health` is process liveness; `GET /api/v1/ready` pings MongoDB and returns a generic `503` when unavailable; Fastify close hook closes the client | Verify these behaviors against Atlas before relying on deployment readiness |
 
 ### E1. First design-led implementation slice — sign-in mock
 
@@ -147,15 +149,16 @@ This is the persistent test-case register. Update **Status**, **Actual result / 
 | T-022 | Sign-in mock email format: submit malformed email with a non-empty password | Inline email format message appears and form does not proceed | Passed | Submitting `bad-email` showed “Enter a valid email address.” | 2026-11-02 |
 | T-023 | Sign-in mock password visibility: activate Show, then Hide | Password changes between masked and readable; accessible button name matches the current action | Passed | Browser accessibility tree changed button name from “Show password” to “Hide password” and back | 2026-11-02 |
 | T-024 | Sign-in mock responsive and keyboard pass: inspect 1440px, 768px and 375px widths; tab through controls | No horizontal overflow or clipped primary action; single-column tablet/mobile layout; visible focus and usable form controls | Passed | Temporary same-origin preview rendered exact 1440px, 768px and 375px CSS viewports. Desktop: 1440px document width, grid layout, primary action fits. Tablet after breakpoint fix: 768px viewport, 753px document width (scrollbar excluded), flex/one-column layout, primary action fits. Phone: 375px viewport, 360px document width, flex layout, primary action fits. Visible keyboard focus verified on Forgot password; temporary harness removed | 2026-11-02 |
-| T-025 | Review MongoDB/API foundation proposal against PRD, System Design and API Design | Workspace ownership, collection/index boundaries, project API contracts, unresolved decisions and test cases are consistent with source drafts | Not run | Design proposal written to `docs/DATABASE_API_FOUNDATION.md`; awaiting review; no MongoDB implementation or live database verification | — |
-| DB-01–DB-03, PRJ-01–PRJ-07, JOB-01 | MongoDB readiness, indexes, project CRUD/authorization/concurrency/archive, and command idempotency acceptance cases | Behaviors match `docs/DATABASE_API_FOUNDATION.md` | Not run | Planned implementation cases; no database package, project routes or test harness exists yet | — |
+| T-025 | Review MongoDB/API foundation proposal against PRD, System Design and API Design | Workspace ownership, collection/index boundaries, project API contracts, unresolved decisions and test cases are consistent with source drafts | Passed (design review) | Proposal records source decisions and explicitly lists conflicts/open decisions; live implementation/database behavior not covered | 2026-11-02 |
+| DB-01–DB-03, PRJ-01–PRJ-07, JOB-01 | MongoDB readiness, indexes, project CRUD/authorization/concurrency/archive, and command idempotency acceptance cases | Behaviors match `docs/DATABASE_API_FOUNDATION.md` | Not run | MongoDB client/readiness code exists; no index bootstrap, auth integration or project routes yet; no live database verification | — |
+| T-026 | Type-check API and database packages | MongoDB package, API config, readiness schemas and Fastify routes compile with strict TypeScript | Passed | `npm run typecheck --workspace @videogen/api` passed, including contracts and database package builds. No live Atlas connection check was run | 2026-11-02 |
 
 ### Test execution update log
 
 | Date | Test IDs updated | Summary | Evidence / follow-up |
 |---|---|---|---|
 | 2026-11-02 | T-001–T-007, T-019–T-024 | Initial inventory and partial Stitch QA recorded; scaffold and sign-in mock created; dependency install, TypeScript, final production build, web route and API health passed; sign-in interaction tests passed; responsive QA found and fixed the 768px tablet layout; final checks passed at 1440px, 768px and 375px | Review the sign-in mock; decide auth provider/method and session behavior before implementing the first working auth slice |
-| 2026-11-02 | T-025, DB-01–DB-03, PRJ-01–PRJ-07, JOB-01 | Read current PRD, System Design and API Design drafts; drafted MongoDB collection/index proposal, workspace-scoped project API, implementation sequence and acceptance cases in `docs/DATABASE_API_FOUNDATION.md` | Design review is pending; no MongoDB code or integration tests were run. Next: settle auth adapter and local DB setup, then implement connection/readiness first |
+| 2026-11-02 | T-025–T-026, DB-01–DB-03, PRJ-01–PRJ-07, JOB-01 | Reviewed PRD/System/API drafts; implemented MongoDB client package, Atlas-backed local config, liveness/readiness split and graceful client shutdown; API/database type-check passed | Atlas connectivity and readiness behavior are not yet verified. Project CRUD remains blocked on the auth session contract; next: verify the Atlas ping and then choose the Better Auth adapter/session setup |
 
 ## Decision register
 

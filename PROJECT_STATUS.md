@@ -24,7 +24,7 @@
 | Design | Google Stitch project exists and has been iterated; latest full-project QA is incomplete |
 | Requirements and technical specs | PRD, System Design, and API Design exist as review drafts in `C:\Users\Chetan\Downloads`; they are not yet in this repository |
 | Repository contents | Initial scaffold and design/status docs committed as `8090b62`; `main` is stable and ongoing work is on `dev`, tracking `origin/dev` |
-| Immediate priority | Resolve DNS SRV lookup failure from this environment; then settle the authentication adapter/session contract before implementing project persistence |
+| Immediate priority | Settle the authentication adapter/session contract before implementing project persistence; MongoDB Atlas connectivity is now verified |
 
 ## Product and architecture baseline
 
@@ -97,7 +97,7 @@ Update each row as work changes. Add links to PRs, commits, screenshots, test re
 | SCAFF-06 | Install dependencies / generate lockfile | Done | `npm install --no-audit --no-fund` completed successfully and generated root `package-lock.json` | Keep lockfile committed with workspace changes |
 | SCAFF-07 | Build and type-check scaffold | Done (with local compiler workaround) | `npm run typecheck` passed; `npm run build` passed all workspaces after using Next.js's matching WebAssembly compiler because the installed Windows SWC binary could not load | Keep the compiler workaround local; resolve native SWC issue if it recurs on this machine |
 | DBF-01 | Add managed MongoDB client package and validated API configuration | Done (implementation only) | `packages/database` wraps one MongoDB client per API process; API config validates URI/database name without echoing values | Add index bootstrap only with approved model/index definitions |
-| DBF-02 | Separate API liveness from MongoDB readiness and close the client on shutdown | Done (implementation only) | `GET /api/v1/health` is process liveness; `GET /api/v1/ready` pings MongoDB and returns a generic `503` when unavailable; Fastify close hook closes the client | Resolve DNS SRV refusal and confirm a successful readiness response |
+| DBF-02 | Separate API liveness from MongoDB readiness and close the client on shutdown | Done | `GET /api/v1/health` is process liveness; `GET /api/v1/ready` pings MongoDB and returns a generic `503` when unavailable; Fastify close hook closes the client | None |
 | DBF-03 | Close Fastify and the MongoDB client on process termination | Done (implementation only) | `SIGINT` and `SIGTERM` now call `app.close()`; Fastify's `onClose` hook closes the database client | Runtime signal-shutdown verification remains not run |
 
 ### E1. First design-led implementation slice — sign-in mock
@@ -157,6 +157,7 @@ This is the persistent test-case register. Update **Status**, **Actual result / 
 | T-027 | Check API liveness and readiness with MongoDB unreachable | Liveness remains `200`; readiness returns a generic `503` without leaking connection details | Passed (failure path) | Confirmed both endpoints; MongoDB SRV DNS resolution failed with `ECONNREFUSED` on `querySrv`, before reaching Atlas. Cluster state, Atlas allowlist, and credentials remain unverified | 2026-11-02 |
 | T-028 | Start the TypeScript API development watcher in the current Windows environment | API watcher starts and serves health/readiness routes | Blocked (environment) | Both `npm run dev:api` and direct `tsx` startup hit `spawn EPERM` in the esbuild/Node watch child process. The compiled API launched with Node and served the checked endpoints. Retry the watcher outside this restricted environment | 2026-11-02 |
 | T-029 | Send `SIGINT` and `SIGTERM` to a running compiled API process | Each signal closes Fastify, runs `onClose`, and closes MongoDB without a forced exit | Not run | Shutdown handlers were added; runtime signal delivery/cleanup has not been verified | — |
+| T-030 | Resolve Atlas SRV records and verify a live MongoDB ping from the API | API readiness reports `ready` and MongoDB is connected | Passed | Default Node SRV resolution returned `ECONNREFUSED`; Windows DNS lookup and Node SRV/TXT queries through Google DNS succeeded. Added optional `MONGODB_DNS_SERVERS`, configured locally as `8.8.8.8,8.8.4.4`; compiled API then returned `/api/v1/ready` HTTP 200 with `database: connected` and `/api/v1/health` HTTP 200 | 2026-11-02 |
 
 ### Test execution update log
 
@@ -165,6 +166,7 @@ This is the persistent test-case register. Update **Status**, **Actual result / 
 | 2026-11-02 | T-001–T-007, T-019–T-024 | Initial inventory and partial Stitch QA recorded; scaffold and sign-in mock created; dependency install, TypeScript, final production build, web route and API health passed; sign-in interaction tests passed; responsive QA found and fixed the 768px tablet layout; final checks passed at 1440px, 768px and 375px | Review the sign-in mock; decide auth provider/method and session behavior before implementing the first working auth slice |
 | 2026-11-02 | T-025–T-028, DB-01–DB-03, PRJ-01–PRJ-07, JOB-01 | Reviewed PRD/System/API drafts; implemented MongoDB client package, Atlas-backed local config, liveness/readiness split and graceful client shutdown; type-check passed; manually verified liveness/readiness failure behavior | SRV DNS resolution is refused in this environment, so Atlas was not reached. Retry from a network that permits DNS SRV; project CRUD also awaits the auth session contract. TypeScript watch startup is blocked by this environment's child-process restriction |
 | 2026-11-02 | DBF-03, T-029 | Added process signal handlers that close Fastify on `SIGINT`/`SIGTERM`, invoking the existing MongoDB client cleanup hook | Type-check before commit; runtime signal-shutdown case T-029 remains not run |
+| 2026-11-02 | DBF-02, T-030 | Diagnosed Node SRV lookup refusal as resolver-specific; added optional API-level `MONGODB_DNS_SERVERS` override and configured the local ignored `.env` to use Google DNS. Type-check and API build passed; live Atlas ping passed and readiness returned 200 | Keep the DNS override only where the system resolver refuses SRV queries; continue with authentication/session contract |
 
 ## Decision register
 

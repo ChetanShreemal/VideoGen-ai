@@ -1,7 +1,12 @@
+import { setServers } from "node:dns";
 import Fastify from "fastify";
 import { healthResponseSchema, readinessResponseSchema } from "@videogen/contracts";
 import { MongoDatabase } from "@videogen/database";
 import { config } from "./config.js";
+
+if (config.MONGODB_DNS_SERVERS?.length) {
+  setServers(config.MONGODB_DNS_SERVERS);
+}
 
 const app = Fastify({
   logger: {

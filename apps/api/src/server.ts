@@ -51,6 +51,21 @@ app.addHook("onClose", async () => {
   await database.close();
 });
 
+let shutdownPromise: Promise<void> | undefined;
+
+const shutdown = (signal: NodeJS.Signals): void => {
+  if (shutdownPromise) return;
+
+  app.log.info({ signal }, "Shutting down API gracefully.");
+  shutdownPromise = app.close().catch((error: unknown) => {
+    app.log.error({ err: error }, "API shutdown failed.");
+    process.exitCode = 1;
+  });
+};
+
+process.once("SIGINT", () => shutdown("SIGINT"));
+process.once("SIGTERM", () => shutdown("SIGTERM"));
+
 try {
   await app.listen({ port: config.API_PORT, host: config.API_HOST });
   void database.connect().catch(() => {

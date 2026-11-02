@@ -21,7 +21,7 @@ The local Atlas URI is excluded from Git. No production credentials, paid integr
 | Area | Foundation proposal | Basis / status |
 |---|---|---|
 | Database | MongoDB Atlas in deployed environments; local MongoDB replica set for development and integration tests | Confirmed preferred technology in PRD; deployment details remain to be configured |
-| Current development database | User-provided Atlas cluster, database name `videogen_dev`; URI is in ignored local `.env` only | Configured locally; ping attempt returned `ECONNREFUSED`, so no connection was established |
+| Current development database | User-provided Atlas cluster, database name `videogen_dev`; URI is in ignored local `.env` only | Configured locally; SRV DNS lookup returned `ECONNREFUSED`, so the database was not reached |
 | API | Fastify modular monolith, TypeScript, `/api/v1`, Zod boundary validation | Current scaffold and API/System Design proposals |
 | Identity boundary | One private personal workspace per registered user in V1. Derive `workspaceId` from the authenticated server session; never accept it as authorization from request data. | PRD §13.1 |
 | Database IDs | MongoDB `ObjectId` internally, serialized as opaque hex strings at the API edge | Consistent with API draft; avoids mixed ID conventions |
@@ -89,7 +89,7 @@ Project response fields: `id`, `title`, `topic?`, `settings`, `status`, `revisio
 4. Decide project archive/resume semantics, hard-delete/data-export policy, and retention periods before TTL indexes or cleanup workers are introduced.
 5. Set idempotency retention, usage/audit retention, and job progress detail limits before TTL indexes or unbounded history are introduced.
 6. Decide whether database readiness failure should remove the whole API from service or allow health-only responses; proposal: keep liveness healthy, fail readiness.
-7. Diagnose Atlas TCP `ECONNREFUSED` before relying on readiness: check cluster availability and the configured network access list from the user's environment. The current result does not indicate an authentication failure.
+7. Resolve the environment's DNS SRV lookup failure (`ECONNREFUSED` on `querySrv`) before relying on readiness. The MongoDB server was not reached, so cluster availability, Atlas network access list, and credentials have not been checked.
 
 ## 7. Acceptance and verification plan
 

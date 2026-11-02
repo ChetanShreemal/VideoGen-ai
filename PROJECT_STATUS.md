@@ -23,8 +23,8 @@
 | Application implementation | Starter web app, health-only API and shared contract package scaffolded; first provider-neutral sign-in UI mock added, with no real authentication integration |
 | Design | Google Stitch project exists and has been iterated; latest full-project QA is incomplete |
 | Requirements and technical specs | PRD, System Design, and API Design exist as review drafts in `C:\Users\Chetan\Downloads`; they are not yet in this repository |
-| Repository contents | Design briefs, tracker, npm workspace manifests, web/API starter apps, and shared contracts; changes are currently untracked in Git |
-| Immediate priority | Review the verified sign-in mock; settle auth method/provider and session rules before implementing real authentication |
+| Repository contents | Initial scaffold and design/status docs committed as `8090b62`; `main` is stable and ongoing work is on `dev`, tracking `origin/dev` |
+| Immediate priority | Review the MongoDB/API foundation proposal; settle the authentication adapter and local database setup before implementing persistence |
 
 ## Product and architecture baseline
 
@@ -81,8 +81,8 @@ Update each row as work changes. Add links to PRs, commits, screenshots, test re
 | ARCH-01 | Review System Design | Done | Read current proposal in Downloads on 2026-11-02 | Add it to repository as a review draft |
 | ARCH-02 | Review API Design | Done | Read current API contract draft in Downloads on 2026-11-02 | Add it to repository as a review draft |
 | ARCH-03 | Confirm topology and deployment boundaries | Decision needed | System Design recommends modular API plus separate async workers; deployment details remain open | Approve web/API/worker hosting and environment boundaries |
-| ARCH-04 | Finalize MongoDB models, indexes and ownership rules | Not started | Draft proposals exist; no migrations or models implemented | Map approved screens/resources to schemas and indexes |
-| ARCH-05 | Finalize OpenAPI and shared request/response schemas | Not started | API design is prose/table-based draft; no generated OpenAPI contract found in workspace | Produce OpenAPI 3.1 and synchronized validation schemas |
+| ARCH-04 | Define MongoDB models, indexes and ownership rules | In progress | [`docs/DATABASE_API_FOUNDATION.md`](docs/DATABASE_API_FOUNDATION.md) proposes workspace-scoped collections, indexes and access invariants; no models or migrations implemented | Review proposed design; resolve retention, idempotency and local database setup before implementation |
+| ARCH-05 | Define first project API slice and shared request/response schemas | In progress | Foundation proposal outlines authenticated project CRUD/archive/restore contracts; no OpenAPI or project schemas implemented | Confirm auth/session contract, then add OpenAPI 3.1 and synchronized Zod schemas |
 | ARCH-06 | Define job and publishing state machines | In progress | Draft states and transitions exist in API/System Design | Reconcile and approve stages, retry/cancel and uncertain publish handling |
 
 ### D. Foundation scaffold
@@ -111,7 +111,7 @@ Update each row as work changes. Add links to PRs, commits, screenshots, test re
 
 | Phase | Scope | Status | Exit criteria |
 |---|---|---|---|
-| A — Foundation | App structure, shared schemas, authentication, private workspace ownership, project CRUD, database indexes, API docs, local dev setup | In progress | Starter apps/contracts created; exit criteria not met until auth and owned project CRUD work | Verify scaffold, then implement authentication as the next small feature |
+| A — Foundation | App structure, shared schemas, authentication, private workspace ownership, project CRUD, database indexes, API docs, local dev setup | In progress | Starter apps/contracts created; MongoDB/API design is now drafted; exit criteria not met until auth and owned project CRUD work | Review the database/API proposal and settle adapter/local DB setup; then implement database readiness and the project slice in small steps |
 | B — Creation and generation | Ideas/scripts, versioned storyboard, uploads, voice/audio, async provider jobs, progress/retries | Not started | User can generate a topic and recover/retry without duplicate provider calls or losing successful assets |
 | C — Rendering | Remotion composition, render adapters, output validation, R2 persistence, preview/download | Not started | Verified MP4 rendered, stored durably, and previewed/downloaded from the app |
 | D — Instagram | Meta OAuth, account lifecycle, reviewed post draft, explicit approval, publish job and reconciliation | Not started | Approved post publishes once to an eligible account and visible status is reconciled |
@@ -147,12 +147,15 @@ This is the persistent test-case register. Update **Status**, **Actual result / 
 | T-022 | Sign-in mock email format: submit malformed email with a non-empty password | Inline email format message appears and form does not proceed | Passed | Submitting `bad-email` showed “Enter a valid email address.” | 2026-11-02 |
 | T-023 | Sign-in mock password visibility: activate Show, then Hide | Password changes between masked and readable; accessible button name matches the current action | Passed | Browser accessibility tree changed button name from “Show password” to “Hide password” and back | 2026-11-02 |
 | T-024 | Sign-in mock responsive and keyboard pass: inspect 1440px, 768px and 375px widths; tab through controls | No horizontal overflow or clipped primary action; single-column tablet/mobile layout; visible focus and usable form controls | Passed | Temporary same-origin preview rendered exact 1440px, 768px and 375px CSS viewports. Desktop: 1440px document width, grid layout, primary action fits. Tablet after breakpoint fix: 768px viewport, 753px document width (scrollbar excluded), flex/one-column layout, primary action fits. Phone: 375px viewport, 360px document width, flex layout, primary action fits. Visible keyboard focus verified on Forgot password; temporary harness removed | 2026-11-02 |
+| T-025 | Review MongoDB/API foundation proposal against PRD, System Design and API Design | Workspace ownership, collection/index boundaries, project API contracts, unresolved decisions and test cases are consistent with source drafts | Not run | Design proposal written to `docs/DATABASE_API_FOUNDATION.md`; awaiting review; no MongoDB implementation or live database verification | — |
+| DB-01–DB-03, PRJ-01–PRJ-07, JOB-01 | MongoDB readiness, indexes, project CRUD/authorization/concurrency/archive, and command idempotency acceptance cases | Behaviors match `docs/DATABASE_API_FOUNDATION.md` | Not run | Planned implementation cases; no database package, project routes or test harness exists yet | — |
 
 ### Test execution update log
 
 | Date | Test IDs updated | Summary | Evidence / follow-up |
 |---|---|---|---|
 | 2026-11-02 | T-001–T-007, T-019–T-024 | Initial inventory and partial Stitch QA recorded; scaffold and sign-in mock created; dependency install, TypeScript, final production build, web route and API health passed; sign-in interaction tests passed; responsive QA found and fixed the 768px tablet layout; final checks passed at 1440px, 768px and 375px | Review the sign-in mock; decide auth provider/method and session behavior before implementing the first working auth slice |
+| 2026-11-02 | T-025, DB-01–DB-03, PRJ-01–PRJ-07, JOB-01 | Read current PRD, System Design and API Design drafts; drafted MongoDB collection/index proposal, workspace-scoped project API, implementation sequence and acceptance cases in `docs/DATABASE_API_FOUNDATION.md` | Design review is pending; no MongoDB code or integration tests were run. Next: settle auth adapter and local DB setup, then implement connection/readiness first |
 
 ## Decision register
 

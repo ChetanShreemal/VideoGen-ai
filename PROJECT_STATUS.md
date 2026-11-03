@@ -24,7 +24,7 @@
 | Design | Google Stitch project exists and has been iterated; latest full-project QA is incomplete |
 | Requirements and technical specs | PRD, System Design, and API Design exist as review drafts in `C:\Users\Chetan\Downloads`; they are not yet in this repository |
 | Repository contents | Initial scaffold and design/status docs committed as `8090b62`; `main` is stable and ongoing work is on `dev`, tracking `origin/dev` |
-| Immediate priority | Verify Resend password recovery end to end using the configured test sender and recipient, then implement authenticated project CRUD with owner-scoped access |
+| Immediate priority | Complete the owner-entered password change and sign-in verification; implement authenticated, owner-scoped Projects API and persistence in small slices |
 
 ## Product and architecture baseline
 
@@ -82,7 +82,7 @@ Update each row as work changes. Add links to PRs, commits, screenshots, test re
 | ARCH-02 | Review API Design | Done | Read current API contract draft in Downloads on 2026-11-02 | Add it to repository as a review draft |
 | ARCH-03 | Confirm topology and deployment boundaries | Decision needed | System Design recommends modular API plus separate async workers; deployment details remain open | Approve web/API/worker hosting and environment boundaries |
 | ARCH-04 | Define MongoDB models, indexes and ownership rules | In progress | [`docs/DATABASE_API_FOUNDATION.md`](docs/DATABASE_API_FOUNDATION.md) proposes workspace-scoped collections, indexes and access invariants; shared driver/config/readiness are implemented; no models or migrations exist yet | Review proposed models; resolve retention and idempotency policies before creating indexes or collections |
-| ARCH-05 | Define first project API slice and shared request/response schemas | In progress | Better Auth session contract is implemented at `/api/v1/auth/*`; `/api/v1/me` returns the authenticated user. Foundation proposal outlines project CRUD/archive/restore; no project routes or schemas implemented | Add OpenAPI 3.1 and synchronized Zod schemas for owner-scoped project CRUD |
+| ARCH-05 | Define first project API slice and shared request/response schemas | In progress | Added shared Zod schemas for project settings, create request, project response, create response, and paginated list response in `packages/contracts`; route and persistence are not implemented | Add synchronized OpenAPI 3.1 documentation, then implement the authenticated create/list slice |
 | ARCH-06 | Define job and publishing state machines | In progress | Draft states and transitions exist in API/System Design | Reconcile and approve stages, retry/cancel and uncertain publish handling |
 
 ### D. Foundation scaffold
@@ -177,6 +177,7 @@ This is the persistent test-case register. Update **Status**, **Actual result / 
 | T-037 | Resend delivery smoke check: send a harmless test email to the configured recipient | Resend accepts the message and it arrives in the recipient inbox | Passed (delivery confirmed in Gmail) | Resend accepted message ID `01a1a08e-377a-7895-8d09-5257f84cf8af`; the message appeared in the provided Gmail inbox. The send-only key cannot query email event status | 2026-11-03 |
 | T-038 | Load unauthenticated auth UI with MongoDB connected | Session check resolves to signed-out state; sign-in, sign-up, and password recovery forms are reachable | Passed | Atlas readiness returned 200; page initially stayed pending because Next dev blocked `127.0.0.1` resources. Adding `allowedDevOrigins` resolved hydration; all three forms were opened in browser | 2026-11-03 |
 | T-039 | Open password reset link from email | Link opens the frontend reset form with its one-time token; it does not require direct browser navigation to the local API port | Passed | Opened the newest delivered email's reset link in the browser; the frontend form rendered with the token. Older links in the same email thread may have expired | 2026-11-03 |
+| T-040 | Project API contract: validate create request and project/list response schemas | Valid project payloads parse; empty/oversized titles and client-supplied server-managed fields are rejected; response schemas require owner-safe project fields and cursor envelope | Not run | Shared Zod schemas added; runtime contract assertions remain to be run with the Projects API implementation | — |
 
 ### Test execution update log
 
@@ -230,6 +231,7 @@ This is the persistent test-case register. Update **Status**, **Actual result / 
 | 2026-11-03 | Fixed password reset email target to link straight to the frontend reset form; rebuilt and restarted the API; requested a fresh reset message | API build passed, MongoDB readiness returned 200, and reset request returned the expected generic 200 response | Open the fresh email's reset link; changing the password remains a user handoff |
 | 2026-11-03 | Verified newest reset email link and fixed the invalid/expired-link screen heading/state | Browser opened the latest email link to the reset form; invalid-token responses now show a matching unavailable heading and return-to-sign-in action | Password replacement, new-password sign-in and prior-session revocation remain to be completed by the account owner |
 | 2026-11-03 | Tested latest password recovery changes | Atlas readiness returned 200; browser confirmed a fresh email link opens the reset form. Invalid/expired links now show a matching unavailable heading and sign-in action | Password replacement requires the account owner to enter and submit the new credential; then verify sign-in and old-session revocation |
+| 2026-11-03 | Started Projects feature slice 1: added shared project create/settings/response/list Zod contracts and recorded T-040 | Contract types define strict client input and shared response shapes; no API/database behavior is claimed | Keep duration, language, style, ratio and voice value sets open until PRD decisions are reconciled; next implement OpenAPI documentation and authenticated create/list routes |
 
 ## Update rules for future sessions
 

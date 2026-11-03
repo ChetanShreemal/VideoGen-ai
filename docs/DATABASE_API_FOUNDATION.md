@@ -1,6 +1,6 @@
 # MongoDB and API Foundation — Design Proposal
 
-**Status:** Foundation implementation in progress; project API remains design-only
+**Status:** Foundation implementation in progress; initial shared project Zod contracts are implemented, but API handlers and project persistence are not
 **Scope:** Phase A database/API foundation and the first persistent feature slice
 **Sources:** `PRD.md`, `SYSTEM_DESIGN.md`, and `API_DESIGN.md` review drafts in `C:\Users\Chetan\Downloads`, read 2026-11-02.
 
@@ -11,7 +11,7 @@ Establish a safe, testable MongoDB boundary before adding generation or media pr
 1. Configure the development Atlas cluster using the root `.env` file, excluded by `.gitignore`; keep the connection string out of source control.
 2. Add a shared MongoDB package with one managed client per process and graceful shutdown. **Implemented; type-check passed.**
 3. Add database readiness to the API health surface; keep liveness independent of MongoDB. **Implemented; live connectivity not verified.**
-4. Add project contracts, repository, service, and REST handlers with workspace-scoped authorization. **Not started; auth/session contract remains a prerequisite.**
+4. Add project contracts, repository, service, and REST handlers with workspace-scoped authorization. **Initial request/response Zod contracts are implemented; repository, service and routes remain.**
 5. Add the project API contract to OpenAPI and the test register; verify isolation and persistence against a local MongoDB replica set or Atlas test database.
 
 The local Atlas URI is excluded from Git. No production credentials, paid integrations, or production migration are part of this slice.
@@ -59,6 +59,8 @@ Every application document has `createdAt` and `updatedAt` where appropriate. Wo
 ## 4. First project API contract
 
 All routes require an authenticated session. API response envelope follows the API draft: `{ data, meta? }`; errors use `{ error: { code, message, requestId, details? } }`. `workspaceId` and `createdBy` are never writable request fields.
+
+The shared `@videogen/contracts` package defines strict Zod schemas for project settings, create requests, project responses, create responses, and paginated list responses. These schemas are the source for both API and web types. Settings fields have primitive validation, but their allowed value sets remain intentionally open pending reconciliation of the PRD and System Design notes. Runtime contract cases are recorded as T-040 and have not yet been run.
 
 | Method and route | Contract |
 |---|---|

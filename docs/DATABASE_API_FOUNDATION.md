@@ -1,6 +1,6 @@
 # MongoDB and API Foundation — Design Proposal
 
-**Status:** Foundation implementation in progress; initial shared project Zod contracts are implemented, but API handlers and project persistence are not
+**Status:** Foundation implementation in progress; initial shared project Zod contracts and OpenAPI 3.1 create/list documentation are implemented, but API handlers and project persistence are not
 **Scope:** Phase A database/API foundation and the first persistent feature slice
 **Sources:** `PRD.md`, `SYSTEM_DESIGN.md`, and `API_DESIGN.md` review drafts in `C:\Users\Chetan\Downloads`, read 2026-11-02.
 
@@ -60,7 +60,7 @@ Every application document has `createdAt` and `updatedAt` where appropriate. Wo
 
 All routes require an authenticated session. API response envelope follows the API draft: `{ data, meta? }`; errors use `{ error: { code, message, requestId, details? } }`. `workspaceId` and `createdBy` are never writable request fields.
 
-The shared `@videogen/contracts` package defines strict Zod schemas for project settings, create requests, project responses, create responses, and paginated list responses. These schemas are the source for both API and web types. Settings fields have primitive validation, but their allowed value sets remain intentionally open pending reconciliation of the PRD and System Design notes. Runtime contract cases are recorded as T-040 and have not yet been run.
+The shared `@videogen/contracts` package defines strict Zod schemas for project settings, create requests, project responses, create responses, and paginated list responses. [`openapi.yaml`](openapi.yaml) documents the initial create/list endpoints and these response envelopes. The schemas are the source for both API and web types. Settings fields have primitive validation, but their allowed value sets remain intentionally open pending reconciliation of the PRD and System Design notes. Runtime contract cases are recorded as T-040 and T-041 and have not yet been run.
 
 | Method and route | Contract |
 |---|---|

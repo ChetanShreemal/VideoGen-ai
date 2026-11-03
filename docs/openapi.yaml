@@ -1,0 +1,230 @@
+openapi: 3.1.0
+info:
+  title: VideoGen API
+  version: 0.1.0
+  description: >-
+    Initial API contract for the authenticated Projects create/list slice.
+    Authentication is provided by the Better Auth session cookie.
+servers:
+  - url: http://127.0.0.1:4000/api/v1
+    description: Local development API
+tags:
+  - name: Projects
+    description: Owner-scoped project creation and listing
+paths:
+  /projects:
+    post:
+      operationId: createProject
+      tags: [Projects]
+      summary: Create a project
+      description: >-
+        Creates an active project in the authenticated user's personal workspace.
+        The server derives ownership from the session; workspace and creator IDs
+        are not accepted from the client. This operation does not start paid work.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectRequest'
+            example:
+              title: Rain Cycle
+              topic: How does rain form?
+              settings:
+                durationSeconds: 30
+                language: en
+                visualStyle: 3d-cartoon
+                aspectRatio: 9:16
+                voiceId: configured-voice-id
+      responses:
+        '201':
+          description: Project created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateProjectResponse'
+        '400':
+          description: Request validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+    get:
+      operationId: listProjects
+      tags: [Projects]
+      summary: List active projects
+      description: >-
+        Returns projects owned by the authenticated user's personal workspace,
+        ordered by updatedAt descending with a stable ID tie-breaker.
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Page size; defaults to 20 and is capped at 100.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: cursor
+          in: query
+          required: false
+          description: Opaque cursor returned by the previous page.
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        '200':
+          description: Project page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListProjectsResponse'
+        '400':
+          description: Query validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: better-auth.session_token
+      description: >-
+        Better Auth session cookie. Secure deployments may add the standard
+        __Secure- prefix; the API accepts the cookie issued by the auth endpoints.
+  responses:
+    Unauthenticated:
+      description: A valid authenticated session is required.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+          example:
+            error:
+              code: UNAUTHENTICATED
+              message: A valid session is required.
+  schemas:
+    ProjectSettings:
+      type: object
+      additionalProperties: false
+      description: >-
+        Optional project settings. Allowed values for language, visual style,
+        aspect ratio and voice remain open pending PRD decision reconciliation.
+      properties:
+        durationSeconds:
+          type: integer
+          minimum: 1
+        language:
+          type: string
+          minLength: 2
+          maxLength: 35
+        visualStyle:
+          type: string
+          minLength: 1
+          maxLength: 80
+        aspectRatio:
+          type: string
+          minLength: 1
+          maxLength: 16
+        voiceId:
+          type: string
+          minLength: 1
+          maxLength: 128
+    CreateProjectRequest:
+      type: object
+      additionalProperties: false
+      required: [title]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: Leading and trailing whitespace is trimmed before validation.
+        topic:
+          type: string
+          maxLength: 2000
+        settings:
+          $ref: '#/components/schemas/ProjectSettings'
+    Project:
+      type: object
+      additionalProperties: false
+      required: [id, title, settings, status, revision, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          minLength: 1
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+        topic:
+          type: string
+          maxLength: 2000
+        settings:
+          $ref: '#/components/schemas/ProjectSettings'
+        status:
+          type: string
+          enum: [active, archived]
+        revision:
+          type: integer
+          minimum: 1
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    CreateProjectResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [project]
+          properties:
+            project:
+              $ref: '#/components/schemas/Project'
+    ListProjectsResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [items, nextCursor]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Project'
+            nextCursor:
+              type: [string, 'null']
+              minLength: 1
+    ApiErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string

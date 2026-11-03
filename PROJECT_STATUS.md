@@ -24,7 +24,7 @@
 | Design | Google Stitch project exists and has been iterated; latest full-project QA is incomplete |
 | Requirements and technical specs | PRD, System Design, and API Design exist as review drafts in `C:\Users\Chetan\Downloads`; they are not yet in this repository |
 | Repository contents | Initial scaffold and design/status docs committed as `8090b62`; `main` is stable and ongoing work is on `dev`, tracking `origin/dev` |
-| Immediate priority | Add a Resend API key and permitted sender to local configuration, verify password recovery end to end, then implement authenticated project CRUD with owner-scoped access |
+| Immediate priority | Verify Resend password recovery end to end using the configured test sender and recipient, then implement authenticated project CRUD with owner-scoped access |
 
 ## Product and architecture baseline
 
@@ -108,7 +108,7 @@ Update each row as work changes. Add links to PRs, commits, screenshots, test re
 | AUTH-02 | Mount auth endpoints with credentialed CORS and cookie forwarding | Done | Fastify forwards Better Auth GET/POST requests and multi-value `Set-Cookie`; live signup, sign-in and sign-out passed | Add CSRF/origin and cookie behavior coverage to the auth acceptance suite |
 | AUTH-03 | Add authenticated current-user endpoint | Done | `/api/v1/me` returns 401 without session and returns minimal user profile with valid session | Reuse this session contract for all future protected routes |
 | AUTH-04 | Connect sign-in/sign-up UI to real auth client | Done (implementation only) | `apps/web/src/app/page.tsx` and `src/lib/auth-client.ts` implement email/password sign-in, sign-up and sign-out states | Browser QA loading, error, expired-session and responsive states |
-| AUTH-05 | Provide password reset and verified-email flows | Partial | Resend-backed password reset email callback, one-hour token expiry, session revocation, request form and reset page are implemented. Email verification remains disabled; actual delivery is not verified because `RESEND_API_KEY` is not configured locally | Configure a Resend key and sender; verify request, link, reset, sign-in and session revocation; then decide email verification |
+| AUTH-05 | Provide password reset and verified-email flows | Partial | Resend-backed password reset email callback, one-hour token expiry, session revocation, request form and reset page are implemented. Local Resend key and development sender are configured; actual delivery is not verified. Email verification remains disabled | Verify request, link, reset, sign-in and session revocation; then decide email verification |
 
 ### E1. First design-led implementation slice — sign-in mock
 
@@ -173,7 +173,7 @@ This is the persistent test-case register. Update **Status**, **Actual result / 
 | T-033 | Sign in and read current user using returned cookie | Sign-in returns a session cookie and `/api/v1/me` returns that user's identity | Passed | Live API sign-in succeeded and `/api/v1/me` returned the matching temporary identity; test data removed | 2026-11-02 |
 | T-034 | Sign out and reuse the old session cookie | Sign-out succeeds and the old cookie no longer authenticates `/api/v1/me` | Passed | Live API sign-out succeeded; the revoked cookie then received 401 from `/api/v1/me` | 2026-11-02 |
 | T-035 | API and web static verification | API/web TypeScript checks and API build pass; web production build completes | Partial | API and web typechecks passed and API build passed. Next web production build compiled, then Windows process launch failed with `spawn EPERM` during its TypeScript phase; no build success claimed | 2026-11-02 |
-| T-036 | Password recovery using Resend: request reset, receive link, set new password, sign in with new password, and verify previous sessions are revoked | Generic response regardless of whether email exists; only the recipient receives a time-limited link; reset succeeds once and old sessions stop working | Blocked (configuration) | Resend integration and UI flow are implemented; no `RESEND_API_KEY` is configured locally, so delivery and the full reset lifecycle have not been tested | — |
+| T-036 | Password recovery using Resend: request reset, receive link, set new password, sign in with new password, and verify previous sessions are revoked | Generic response regardless of whether email exists; only the recipient receives a time-limited link; reset succeeds once and old sessions stop working | Not run | Resend integration and UI flow are implemented; local key and development sender are now configured, but delivery and full reset lifecycle have not been tested | — |
 
 ### Test execution update log
 
@@ -185,12 +185,13 @@ This is the persistent test-case register. Update **Status**, **Actual result / 
 | 2026-11-02 | DBF-02, T-030 | Diagnosed Node SRV lookup refusal as resolver-specific; added optional API-level `MONGODB_DNS_SERVERS` override and configured the local ignored `.env` to use Google DNS. Type-check and API build passed; live Atlas ping passed and readiness returned 200 | Keep the DNS override only where the system resolver refuses SRV queries; continue with authentication/session contract |
 | 2026-11-02 | AUTH-01–AUTH-04, T-011, T-031–T-035 | Implemented Better Auth email/password signup/sign-in/sign-out on MongoDB sessions, credentialed auth endpoint forwarding, `/api/v1/me`, and connected web auth UI. API and web typechecks plus API build passed. Live unauthenticated, signup, sign-in/profile and sign-out/revocation checks passed; temporary test data cleanup verified | Next build compiled but ended with Windows `spawn EPERM` in its TypeScript phase. Google OAuth and email verification await policy decisions; browser visual QA remains |
 | 2026-11-03 | AUTH-05, T-036 | Added Resend SDK integration for password reset emails, one-hour reset tokens, session revocation after reset, forgot-password request state and reset-password page. Updated setup guidance and tracker | Not tested; local `.env` has no Resend API key. Configure key and sender, then run T-036. Email verification remains disabled pending policy decision |
+| 2026-11-03 | AUTH-05, T-036 | Added Resend API key and development sender to the ignored local `.env`; verified key format and confirmed `.env` remains Git-ignored without displaying the secret | Live Resend acceptance and password reset flow remain untested; restart API and complete T-036 with a permitted recipient |
 
 ## Decision register
 
 | Decision | Current state | Owner / next action |
 |---|---|---|
-| Auth methods and signup policy | Public email/password signup and Resend for password recovery are selected. Google OAuth, email verification and admin-access policy remain open | Configure Resend credentials/sender; decide whether to require email verification before public launch |
+| Auth methods and signup policy | Public email/password signup and Resend for password recovery are selected. Google OAuth, email verification and admin-access policy remain open | Verify recovery delivery; decide whether to require email verification before public launch |
 | Visual generation provider(s) | Open / not selected | Evaluate provider capability, quality, licensing, latency and cost |
 | Animation model | Open | Decide animated images/motion graphics, generated video clips, or both; define lip-sync scope |
 | Duration presets | Conflicting/open notes (30/60/90 vs earlier ranges) | Confirm V1 options and duration tolerance |
@@ -218,7 +219,7 @@ This is the persistent test-case register. Update **Status**, **Actual result / 
 | Date | Work completed | Checks performed | Remaining / next starting task |
 |---|---|---|---|
 | 2026-11-02 | Inspected repository/specs; scaffolded npm workspaces, web/API shells and health contract; built responsive sign-in mock; added MongoDB readiness and implemented the first Better Auth email/password slice with sign-in, signup, sign-out and `/api/v1/me` | Typechecks, API build, readiness, unauthenticated 401, signup, sign-in/profile, sign-out/revocation passed; disposable test data cleanup confirmed. Web production build compiled but Next's TypeScript phase was blocked by Windows `spawn EPERM`. Earlier mock browser tests passed at 1440px, 768px and 375px; auth UI visual browser QA still pending | Decide verification policy; verify Resend recovery when configured; then implement owner-scoped project CRUD |
-| 2026-11-03 | Wired Resend password recovery and added request/reset screens; updated `.env.example`, README, and project tracker | Not tested; local Resend API key is not configured | Add Resend API key and permitted sender, manually complete T-036, then continue owner-scoped project CRUD |
+| 2026-11-03 | Wired Resend password recovery and added request/reset screens; updated `.env.example`, README, and project tracker; configured the local ignored `.env` with Resend settings | Key format checked and `.env` ignore status confirmed; email delivery and password reset not tested | Restart API, complete T-036 using the configured test recipient, then continue owner-scoped project CRUD |
 
 ## Update rules for future sessions
 

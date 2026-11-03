@@ -12,6 +12,7 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [feedback, setFeedback] = useState("");
   const [success, setSuccess] = useState(false);
+  const [invalidLink, setInvalidLink] = useState(!token);
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -19,7 +20,7 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
     setFeedback("");
 
     if (!token) {
-      setFeedback("This reset link is invalid or has expired. Request a new one.");
+      setInvalidLink(true);
       return;
     }
     if (password.length < 8 || password.length > 128) {
@@ -35,7 +36,7 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
     try {
       const result = await authClient.resetPassword({ newPassword: password, token });
       if (result.error) {
-        setFeedback("This reset link is invalid or has expired. Request a new one.");
+        setInvalidLink(true);
         return;
       }
       setSuccess(true);
@@ -49,18 +50,21 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
   return (
     <section className="reset-card" aria-labelledby="reset-title">
       <p className="eyebrow">ACCOUNT SECURITY</p>
-      <h1 id="reset-title">{success ? "Password updated" : "Choose a new password"}</h1>
+      <h1 id="reset-title">
+        {success ? "Password updated" : invalidLink ? "Reset link unavailable" : "Choose a new password"}
+      </h1>
       <p className="form-subtitle">
         {success
           ? "Your password has been changed and other sessions have been signed out. You can return to sign in."
-          : "Create a new password for your VideoGen account."}
+          : invalidLink
+            ? "This reset link is invalid or has expired. Request a new one."
+            : "Create a new password for your VideoGen account."}
       </p>
 
       {success ? (
         <a className="primary-button reset-submit" href="/">Return to sign in</a>
-      ) : !token ? (
+      ) : invalidLink ? (
         <div className="reset-invalid">
-          <p className="form-feedback error" role="status">This reset link is invalid or has expired. Request a new one.</p>
           <a className="primary-button reset-submit" href="/">Back to sign in</a>
         </div>
       ) : (

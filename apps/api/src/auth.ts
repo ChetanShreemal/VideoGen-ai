@@ -21,9 +21,11 @@ export function createAuth(database: MongoDatabase) {
       maxPasswordLength: 128,
       resetPasswordTokenExpiresIn: 60 * 60,
       revokeSessionsOnPasswordReset: true,
-      sendResetPassword: async ({ user, url }) => {
+      sendResetPassword: async ({ user, token }) => {
         try {
-          await sendPasswordResetEmail(user.email, url);
+          const resetUrl = new URL("/reset-password", config.WEB_ORIGIN);
+          resetUrl.searchParams.set("token", token);
+          await sendPasswordResetEmail(user.email, resetUrl.toString());
         } catch {
           // Avoid logging email addresses, reset tokens, URLs, or provider credentials.
           console.error("Password reset email delivery failed.");

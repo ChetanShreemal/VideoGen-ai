@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
 import type { MongoDatabase } from "@videogen/database";
 import { config } from "./config.js";
+import { sendPasswordResetEmail } from "./email.js";
 
 export function createAuth(database: MongoDatabase) {
   return betterAuth({
@@ -18,6 +19,16 @@ export function createAuth(database: MongoDatabase) {
       requireEmailVerification: false,
       minPasswordLength: 8,
       maxPasswordLength: 128,
+      resetPasswordTokenExpiresIn: 60 * 60,
+      revokeSessionsOnPasswordReset: true,
+      sendResetPassword: async ({ user, url }) => {
+        try {
+          await sendPasswordResetEmail(user.email, url);
+        } catch {
+          // Avoid logging email addresses, reset tokens, URLs, or provider credentials.
+          console.error("Password reset email delivery failed.");
+        }
+      },
     },
     session: {
       expiresIn: 60 * 60 * 24 * 7,

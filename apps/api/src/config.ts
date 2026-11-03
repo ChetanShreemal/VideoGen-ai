@@ -6,6 +6,8 @@ const environmentSchema = z.object({
   WEB_ORIGIN: z.url().default("http://127.0.0.1:3000"),
   BETTER_AUTH_URL: z.url().default("http://127.0.0.1:4000"),
   BETTER_AUTH_SECRET: z.string().min(32),
+  RESEND_API_KEY: z.string().min(1).optional(),
+  AUTH_EMAIL_FROM: z.string().min(1).default("VideoGen <onboarding@resend.dev>"),
   MONGODB_DNS_SERVERS: z
     .string()
     .optional()

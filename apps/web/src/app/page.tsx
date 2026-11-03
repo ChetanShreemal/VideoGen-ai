@@ -14,7 +14,7 @@ export default function HomePage() {
   const [showPassword, setShowPassword] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [feedbackType, setFeedbackType] = useState<"error" | "info" | "">("");
-  const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
+  const [mode, setMode] = useState<"sign-in" | "sign-up" | "forgot-password">("sign-in");
   const [submitting, setSubmitting] = useState(false);
   const [protectedUser, setProtectedUser] = useState<string | null>(null);
   const [checkingApiSession, setCheckingApiSession] = useState(false);
@@ -54,9 +54,9 @@ export default function HomePage() {
     setFeedback("");
     setFeedbackType("");
 
-    if (!email.trim() || !password) {
+    if (!email.trim() || (mode !== "forgot-password" && !password)) {
       setFeedbackType("error");
-      setFeedback("Enter your email and password to continue.");
+      setFeedback(mode === "forgot-password" ? "Enter your email address." : "Enter your email and password to continue.");
       return;
     }
 
@@ -80,6 +80,23 @@ export default function HomePage() {
 
     setSubmitting(true);
     try {
+      if (mode === "forgot-password") {
+        const result = await authClient.requestPasswordReset({
+          email: email.trim().toLowerCase(),
+          redirectTo: `${window.location.origin}/reset-password`,
+        });
+
+        if (result.error) {
+          setFeedbackType("error");
+          setFeedback("We couldn't process that request. Try again shortly.");
+          return;
+        }
+
+        setFeedbackType("info");
+        setFeedback("If an account exists for this email, a password reset link will arrive shortly.");
+        return;
+      }
+
       if (mode === "sign-up") {
         const result = await authClient.signUp.email({
           name: name.trim(),
@@ -186,9 +203,15 @@ export default function HomePage() {
               <>
                 <div className="form-heading">
                   <p className="eyebrow">YOUR CREATIVE STUDIO</p>
-                  <h1 id="sign-in-title">{mode === "sign-in" ? "Welcome back" : "Create your account"}</h1>
+                  <h1 id="sign-in-title">
+                    {mode === "sign-in" ? "Welcome back" : mode === "sign-up" ? "Create your account" : "Reset your password"}
+                  </h1>
                   <p className="form-subtitle">
-                    {mode === "sign-in" ? "Sign in to continue building your next story." : "Start building your next story with VideoGen."}
+                    {mode === "sign-in"
+                      ? "Sign in to continue building your next story."
+                      : mode === "sign-up"
+                        ? "Start building your next story with VideoGen."
+                        : "Enter your account email and we’ll send a secure reset link if it matches an account."}
                   </p>
                 </div>
 
@@ -204,13 +227,14 @@ export default function HomePage() {
                     <input autoComplete="email" id="email" name="email" onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" type="email" value={email} />
                   </div>
 
-                  <div className="field">
+                  {mode !== "forgot-password" && <div className="field">
                     <div className="field-label-row">
                       <label htmlFor="password">Password</label>
                       {mode === "sign-in" && (
                         <button className="text-link text-button" onClick={() => {
-                          setFeedbackType("info");
-                          setFeedback("Password recovery will be available after email delivery is configured.");
+                          setMode("forgot-password");
+                          setFeedback("");
+                          setFeedbackType("");
                         }} type="button">Forgot password?</button>
                       )}
                     </div>
@@ -220,24 +244,24 @@ export default function HomePage() {
                         {showPassword ? "Hide" : "Show"}
                       </button>
                     </div>
-                  </div>
+                  </div>}
 
                   {feedback && <p className={`form-feedback ${feedbackType}`} role="status">{feedback}</p>}
 
                   <button className="primary-button" disabled={submitting} type="submit">
-                    {submitting ? "Please wait…" : mode === "sign-in" ? "Sign in" : "Create account"} <span aria-hidden="true">→</span>
+                    {submitting ? "Please wait…" : mode === "sign-in" ? "Sign in" : mode === "sign-up" ? "Create account" : "Send reset link"} <span aria-hidden="true">→</span>
                   </button>
                 </form>
 
                 <p className="signup-prompt">
-                  {mode === "sign-in" ? "New to VideoGen?" : "Already have an account?"}{" "}
+                  {mode === "sign-in" ? "New to VideoGen?" : mode === "sign-up" ? "Already have an account?" : "Remembered your password?"}{" "}
                   <button className="text-link text-button" disabled={submitting} onClick={() => {
                     setMode(mode === "sign-in" ? "sign-up" : "sign-in");
                     setFeedback("");
                     setFeedbackType("");
                   }} type="button">{mode === "sign-in" ? "Create an account" : "Sign in"}</button>
                 </p>
-                <p className="mock-note">Sign-in is ready for development. Email verification is not configured.</p>
+                <p className="mock-note">{mode === "forgot-password" ? "Reset links expire after one hour." : "Email verification is not configured."}</p>
               </>
             )}
           </div>

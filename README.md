@@ -1,11 +1,11 @@
 # AI VideoGen
 
-AI VideoGen is being built in small, reviewable increments. This repository currently contains only the application foundation; product features and external integrations are intentionally not implemented yet.
+AI VideoGen is being built in small, reviewable increments. The repository includes a web/API foundation and the first email/password authentication slice. See `PROJECT_STATUS.md` for implementation, test, and decision status.
 
 ## Current scaffold
 
 - `apps/web` — Next.js App Router application (TypeScript).
-- `apps/api` — Node.js TypeScript REST API using Fastify; currently exposes a health endpoint only.
+- `apps/api` — Node.js TypeScript REST API using Fastify; MongoDB-backed Better Auth sessions, health/readiness, and Resend password-reset integration.
 - `packages/contracts` — shared Zod contracts for API boundaries.
 - `PROJECT_STATUS.md` — project plan, implementation status, test cases, results, open decisions, and session log.
 
@@ -34,6 +34,8 @@ npm run dev:api
 
 The web app starts at `http://localhost:3000`. The API health endpoint is `http://127.0.0.1:4000/api/v1/health`.
 
+To deliver password reset messages, configure `RESEND_API_KEY` and `AUTH_EMAIL_FROM` in the ignored root `.env` file. The sender address must be permitted by your Resend account; the example uses Resend's onboarding sender for initial development.
+
 Build and type-check commands are available at the root:
 
 ```powershell
@@ -45,8 +47,8 @@ npm run typecheck
 
 Each step should have a narrow scope, acceptance criteria, and recorded verification in `PROJECT_STATUS.md` before starting the next feature.
 
-1. **Foundation (current):** monorepo, web shell, API process, shared contracts.
-2. **Authentication:** choose and configure signup/login, sessions, protected routes, and account flows.
+1. **Foundation:** monorepo, web shell, API process, shared contracts, and MongoDB readiness.
+2. **Authentication (in progress):** email/password sign-up/sign-in and sessions are implemented; password recovery is wired to Resend; configure credentials and verify email delivery, then decide email verification policy.
 3. **Projects:** private ownership, project create/list/open/update/archive flows and persistence.
 4. **Idea and storyboard:** validated contracts, generation provider decision, editable versions, approval.
 5. **Assets and audio:** uploads, storage adapter, voice/music controls, async job status.
@@ -61,4 +63,4 @@ Push completed project changes to the `origin` remote after committing them. Kee
 
 ## Decisions deliberately deferred
 
-Database connection, auth provider configuration, background orchestration, visual-generation provider, AI credentials, object storage, cloud rendering, and Meta publishing are not configured in this scaffold. See the decision register in `PROJECT_STATUS.md` and the review drafts in `C:\Users\Chetan\Downloads`.
+Resend delivery requires a private API key and permitted sender configuration. Google OAuth, email verification policy, background orchestration, visual-generation provider, AI credentials, object storage, cloud rendering, and Meta publishing remain open or unconfigured. See `PROJECT_STATUS.md` and the review drafts in `C:\Users\Chetan\Downloads`.

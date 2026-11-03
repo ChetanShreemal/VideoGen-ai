@@ -3,6 +3,7 @@ import { mongodbAdapter } from "better-auth/adapters/mongodb";
 import type { MongoDatabase } from "@videogen/database";
 import { config } from "./config.js";
 import { sendPasswordResetEmail } from "./email.js";
+import { provisionPersonalWorkspace } from "./projects/project-repository.js";
 
 export function createAuth(database: MongoDatabase) {
   return betterAuth({
@@ -13,6 +14,15 @@ export function createAuth(database: MongoDatabase) {
     baseURL: config.BETTER_AUTH_URL,
     basePath: "/api/v1/auth",
     trustedOrigins: [config.WEB_ORIGIN],
+    databaseHooks: {
+      user: {
+        create: {
+          after: async (user) => {
+            await provisionPersonalWorkspace(database, user.id);
+          },
+        },
+      },
+    },
     emailAndPassword: {
       enabled: true,
       autoSignIn: false,

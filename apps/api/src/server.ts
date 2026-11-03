@@ -11,6 +11,8 @@ import {
 import { MongoDatabase } from "@videogen/database";
 import { createAuth } from "./auth.js";
 import { config } from "./config.js";
+import { registerProjectRoutes } from "./projects/project-routes.js";
+import { ProjectRepository } from "./projects/project-repository.js";
 
 if (config.MONGODB_DNS_SERVERS?.length) {
   setServers(config.MONGODB_DNS_SERVERS);
@@ -30,11 +32,14 @@ const database = new MongoDatabase({
   databaseName: config.MONGODB_DB_NAME,
 });
 const auth = createAuth(database);
+const projectRepository = new ProjectRepository(database, config.BETTER_AUTH_SECRET);
 
 await app.register(fastifyCors, {
   origin: config.WEB_ORIGIN,
   credentials: true,
 });
+
+await registerProjectRoutes(app, auth, projectRepository);
 
 app.route({
   method: ["GET", "POST"],

@@ -53,6 +53,13 @@ export const createProjectRequestSchema = z.object({
 
 export type CreateProjectRequest = z.infer<typeof createProjectRequestSchema>;
 
+export const listProjectsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  cursor: z.string().min(1).optional(),
+}).strict();
+
+export type ListProjectsQuery = z.infer<typeof listProjectsQuerySchema>;
+
 export const projectResponseSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1).max(120),
@@ -74,5 +81,12 @@ export const listProjectsResponseSchema = z.object({
   data: z.object({
     items: z.array(projectResponseSchema),
     nextCursor: z.string().min(1).nullable(),
+  }).strict(),
+}).strict();
+
+export const apiErrorResponseSchema = z.object({
+  error: z.object({
+    code: z.string().min(1),
+    message: z.string().min(1),
   }).strict(),
 }).strict();

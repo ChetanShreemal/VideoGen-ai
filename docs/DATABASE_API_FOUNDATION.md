@@ -10,8 +10,8 @@ Establish a safe, testable MongoDB boundary before adding generation or media pr
 
 1. Configure the development Atlas cluster using the root `.env` file, excluded by `.gitignore`; keep the connection string out of source control.
 2. Add a shared MongoDB package with one managed client per process and graceful shutdown. **Implemented; type-check passed.**
-3. Add database readiness to the API health surface; keep liveness independent of MongoDB. **Implemented; live connectivity not verified.**
-4. Add project contracts, repository, service, and REST handlers with workspace-scoped authorization. **Initial request/response Zod contracts are implemented; repository, service and routes remain.**
+3. Add database readiness to the API health surface; keep liveness independent of MongoDB. **Implemented; Atlas readiness returned 200 on 2026-11-03.**
+4. Add project contracts, repository, service, and REST handlers with workspace-scoped authorization. **Initial request/response Zod contracts, personal workspace provisioning, repository, and authenticated create/list routes are implemented; broader CRUD remains.**
 5. Add the project API contract to OpenAPI and the test register; verify isolation and persistence against a local MongoDB replica set or Atlas test database.
 
 The local Atlas URI is excluded from Git. No production credentials, paid integrations, or production migration are part of this slice.
@@ -85,17 +85,17 @@ Project response fields: `id`, `title`, `topic?`, `settings`, `status`, `revisio
 
 ## 6. Open decisions before implementation
 
-1. Confirm Better Auth MongoDB adapter/version and exact signup methods, verification, and session policy. Until then, no user-facing project route can safely be treated as authenticated.
-2. Local development uses the supplied Atlas cluster for now. Decide whether to add a Docker replica-set fallback; do not commit real connection strings.
+1. Better Auth MongoDB sessions are implemented; email verification remains disabled pending the product policy decision. Project routes require its session and derive workspace ownership server-side.
+2. Local development uses the supplied Atlas cluster. Decide whether to add a Docker replica-set fallback; do not commit real connection strings.
 3. Reconcile the spec header's “duration/aspect ratios open” note with the body decisions for 30/60/90 seconds and 9:16, 16:9, 1:1 before freezing `settings` enums.
 4. Decide project archive/resume semantics, hard-delete/data-export policy, and retention periods before TTL indexes or cleanup workers are introduced.
 5. Set idempotency retention, usage/audit retention, and job progress detail limits before TTL indexes or unbounded history are introduced.
-6. Decide whether database readiness failure should remove the whole API from service or allow health-only responses; proposal: keep liveness healthy, fail readiness.
-7. Resolve the environment's DNS SRV lookup failure (`ECONNREFUSED` on `querySrv`) before relying on readiness. The MongoDB server was not reached, so cluster availability, Atlas network access list, and credentials have not been checked.
+6. Liveness remains available independently of MongoDB; readiness reports unavailable on database failure.
+7. The Windows DNS SRV lookup issue was resolved for the current environment with `MONGODB_DNS_SERVERS`; API readiness returned 200 with Atlas connected. Recheck if the network/environment changes.
 
 ## 7. Acceptance and verification plan
 
-These are design/implementation acceptance cases, not results; none has been run against MongoDB because no database package or connection is implemented yet.
+These acceptance cases are tracked separately from their results. The first create/list integration and cursor-isolation cases have been run against Atlas; see T-040–T-043 in `PROJECT_STATUS.md`. Remaining CRUD and database bootstrap cases are not yet verified.
 
 | ID | Case | Expected result |
 |---|---|---|
@@ -111,4 +111,4 @@ These are design/implementation acceptance cases, not results; none has been run
 | PRJ-07 | Repeat archive request | Safe idempotent result; no duplicate cleanup action. |
 | JOB-01 | Repeat an async command with same key and same body, then same key with a different body | First retry reuses original job; changed payload returns `409 IDEMPOTENCY_CONFLICT`. |
 
-Implementation is ready to begin after the user reviews this proposal and the auth/database setup decisions needed for the selected slice are settled.
+Next implementation slice: add read/update/archive/restore routes and the project UI after create/list persistence and ownership are verified against Atlas.

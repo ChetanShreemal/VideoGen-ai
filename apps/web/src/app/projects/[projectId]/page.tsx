@@ -137,12 +137,16 @@ export default function ProjectDetailsPage() {
         setError("This project changed since you opened it. Reload to get the latest settings before saving.");
         return;
       }
-      if (!response.ok) throw new Error("Audio settings could not be saved.");
+      if (!response.ok) {
+        setError(`Audio preferences could not be saved (HTTP ${response.status}). Try again.`);
+        return;
+      }
       const result = projectResponseEnvelopeSchema.parse(await response.json());
       setProject(result.data.project);
       setMessage("Audio preferences saved. They will apply when audio generation is connected.");
-    } catch {
-      setError("Audio preferences could not be saved. Try again.");
+    } catch (cause) {
+      console.error("Audio preferences save failed.", cause);
+      setError("Audio preferences could not be saved because the API could not be reached. Check the API connection and try again.");
     } finally {
       setWorking(false);
     }

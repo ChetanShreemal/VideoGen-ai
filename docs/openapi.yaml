@@ -185,12 +185,12 @@ paths:
     post:
       operationId: archiveProject
       tags: [Projects]
-      summary: Archive an active project
+      summary: Archive a project (safe to retry)
       security:
         - sessionCookie: []
       responses:
         '200':
-          description: Archived project
+          description: Archived project; repeating this request returns the same archived state without another revision change
           content:
             application/json:
               schema:

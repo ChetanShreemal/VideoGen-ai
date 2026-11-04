@@ -132,7 +132,18 @@ export class ProjectRepository {
   }
 
   async archive(ownerUserId: string, projectId: ObjectId): Promise<ProjectResponse | null> {
-    return this.changeStatus(ownerUserId, projectId, "active", "archived");
+    const workspaceId = await this.ensurePersonalWorkspace(ownerUserId);
+    const archived = await this.projects.findOneAndUpdate(
+      { _id: projectId, workspaceId, status: "active" },
+      { $set: { status: "archived", updatedAt: new Date() }, $inc: { revision: 1 } },
+      { returnDocument: "after" },
+    );
+    if (archived) return this.toResponse(archived);
+
+    // A retry can arrive after the first archive succeeded but its response was lost.
+    // Return the existing archived record without incrementing its revision again.
+    const existing = await this.projects.findOne({ _id: projectId, workspaceId, status: "archived" });
+    return existing ? this.toResponse(existing) : null;
   }
 
   async restore(ownerUserId: string, projectId: ObjectId): Promise<ProjectResponse | null> {

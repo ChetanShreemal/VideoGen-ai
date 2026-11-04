@@ -53,6 +53,40 @@ export const projectSettingsSchema = z.object({
   audioMix: projectAudioMixSchema.optional(),
 }).strict();
 
+// Provisional V1 reference-upload limits. The API must also inspect the
+// uploaded bytes/media; client-provided MIME type and size are not trusted.
+const MiB = 1024 * 1024;
+export const assetUploadPolicy = {
+  imageMimeTypes: ["image/jpeg", "image/png", "image/webp"] as const,
+  videoMimeTypes: ["video/mp4", "video/quicktime"] as const,
+  maxImageBytes: 20 * MiB,
+  maxVideoBytes: 100 * MiB,
+  maxVideoDurationSeconds: 30,
+  maxVideoWidth: 1920,
+  maxVideoHeight: 1080,
+  maxAssetsPerProject: 20,
+  maxBytesPerUser: 1024 * MiB,
+  uploadUrlTtlSeconds: 10 * 60,
+  readUrlTtlSeconds: 5 * 60,
+} as const;
+
+const referenceMimeTypes = [...assetUploadPolicy.imageMimeTypes, ...assetUploadPolicy.videoMimeTypes] as const;
+const referenceImageMimeTypeSet = new Set<string>(assetUploadPolicy.imageMimeTypes);
+
+export const assetUploadRequestSchema = z.object({
+  fileName: z.string().trim().min(1).max(255).refine((value) => !/[\\/\u0000-\u001f]/.test(value), "File name contains unsupported characters."),
+  contentType: z.enum(referenceMimeTypes),
+  sizeBytes: z.number().int().positive().max(assetUploadPolicy.maxVideoBytes),
+  rightsConfirmed: z.literal(true),
+}).strict().superRefine((value, context) => {
+  const limit = referenceImageMimeTypeSet.has(value.contentType) ? assetUploadPolicy.maxImageBytes : assetUploadPolicy.maxVideoBytes;
+  if (value.sizeBytes > limit) {
+    context.addIssue({ code: "custom", path: ["sizeBytes"], message: "File exceeds the limit for its media type." });
+  }
+});
+
+export type AssetUploadRequest = z.infer<typeof assetUploadRequestSchema>;
+
 export const createProjectRequestSchema = z.object({
   title: z.string().trim().min(1).max(120),
   topic: z.string().trim().max(2_000).optional(),

@@ -290,8 +290,11 @@ components:
       additionalProperties: false
       description: >-
         Optional project settings. Allowed values for language, visual style,
-        aspect ratio and voice remain open pending PRD decision reconciliation.
+        aspect ratio, duration and voice remain open pending PRD decision reconciliation.
       properties:
+        genre:
+          type: string
+          enum: [cartoon, educational]
         durationSeconds:
           type: integer
           minimum: 1

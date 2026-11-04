@@ -171,6 +171,36 @@ h1 { margin: 0; font-size: clamp(34px, 4vw, 46px); font-weight: 600; letter-spac
 .project-create-fields input, .detail-panel input, .detail-panel textarea { width: 100%; min-width: 0; min-height: 44px; padding: 0 12px; border: 1px solid #373a3d; border-radius: 6px; outline: none; background: #141618; color: var(--text); font-size: 11px; }
 .project-create-fields input:focus, .detail-panel input:focus, .detail-panel textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(242,140,40,.12); }
 .project-create-fields .primary-button { min-width: 145px; height: 44px; margin: 0; padding: 0 13px; }
+.idea-setup { grid-template-columns: minmax(220px, .68fr) minmax(390px, 1.32fr); align-items: start; }
+.idea-setup-heading { position: sticky; top: 24px; }
+.idea-setup-heading h2 { margin-top: 19px; font-size: clamp(22px, 2.4vw, 30px); letter-spacing: -.04em; }
+.idea-setup-heading p:not(.eyebrow) { max-width: 300px; font-size: 12px; }
+.idea-step-track { width: 100%; max-width: 200px; height: 3px; margin-top: 18px; overflow: hidden; border-radius: 99px; background: #333638; }
+.idea-step-track span { display: block; width: 25%; height: 100%; border-radius: inherit; background: var(--accent); }
+.idea-setup-fields { display: grid; gap: 18px; }
+.idea-setup-fields .field { gap: 8px; color: #e4e4e0; font-size: 12px; font-weight: 500; }
+.idea-setup-fields .field input, .idea-setup-fields .field textarea { width: 100%; min-width: 0; border: 1px solid #373a3d; border-radius: 7px; outline: none; background: #141618; color: var(--text); font: inherit; font-size: 13px; }
+.idea-setup-fields .field input { height: 46px; padding: 0 13px; }
+.idea-setup-fields .field textarea { min-height: 112px; padding: 12px 13px; resize: vertical; line-height: 1.55; }
+.idea-setup-fields .field input:focus, .idea-setup-fields .field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(242,140,40,.12); }
+.idea-setup-fields .field input::placeholder, .idea-setup-fields .field textarea::placeholder { color: #777c7d; }
+.idea-choice-group { min-width: 0; margin: 0; padding: 0; border: 0; }
+.idea-choice-group legend { margin-bottom: 9px; color: #e4e4e0; font-size: 12px; font-weight: 500; }
+.idea-choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.idea-choice { display: grid; min-height: 67px; align-content: center; gap: 5px; padding: 11px 13px; border: 1px solid #373a3d; border-radius: 7px; background: #141618; color: var(--text); cursor: pointer; text-align: left; transition: border-color .16s ease, background .16s ease; }
+.idea-choice span { font-size: 12px; font-weight: 600; }
+.idea-choice small { color: var(--muted); font-size: 10px; line-height: 1.4; }
+.idea-choice:hover, .idea-pill:hover { border-color: #72716e; }
+.idea-choice.selected, .idea-pill.selected { border-color: var(--accent); background: rgba(242,140,40,.08); }
+.idea-choice:focus-visible, .idea-pill:focus-visible { outline: 2px solid #ffb76d; outline-offset: 2px; }
+.idea-choice-row { display: grid; grid-template-columns: 1fr 1.3fr; gap: 18px; }
+.idea-pills { display: flex; flex-wrap: wrap; gap: 7px; }
+.idea-pill { min-height: 34px; padding: 0 11px; border: 1px solid #373a3d; border-radius: 6px; background: #141618; color: #deddd8; cursor: pointer; font-size: 10px; transition: border-color .16s ease, background .16s ease; }
+.idea-pill.selected { color: #ffb76d; }
+.provisional-note { margin-left: 5px; color: var(--quiet); font-size: 9px; font-weight: 400; text-transform: uppercase; letter-spacing: .06em; }
+.idea-provisional-copy { margin: -9px 0 0; color: var(--quiet); font-size: 10px; line-height: 1.5; }
+.idea-save { width: 100%; min-height: 47px; }
+.idea-setup .form-feedback { margin: 0; }
 .project-list-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 17px; }
 .project-list-heading span { color: var(--quiet); font-size: 10px; }
 .project-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
@@ -218,6 +248,9 @@ h1 { margin: 0; font-size: clamp(34px, 4vw, 46px); font-weight: 600; letter-spac
 
 @media (max-width: 900px) {
   .project-create { grid-template-columns: 1fr; gap: 20px; }
+  .idea-setup { grid-template-columns: 1fr; }
+  .idea-setup-heading { position: static; }
+  .idea-choice-row { grid-template-columns: 1fr; gap: 16px; }
   .project-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 600px) {

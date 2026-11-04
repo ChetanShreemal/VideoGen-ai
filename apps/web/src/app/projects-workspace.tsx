@@ -31,6 +31,9 @@ export function ProjectsWorkspace({
   const [error, setError] = useState("");
   const [title, setTitle] = useState("");
   const [topic, setTopic] = useState("");
+  const [genre, setGenre] = useState<"cartoon" | "educational" | "">("");
+  const [durationSeconds, setDurationSeconds] = useState<number | null>(null);
+  const [aspectRatio, setAspectRatio] = useState<string | null>(null);
 
   const loadProjects = useCallback(async (nextStatus: ProjectStatus, nextCursor?: string, append = false) => {
     setLoading(true);
@@ -61,12 +64,23 @@ export function ProjectsWorkspace({
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title, ...(topic.trim() ? { topic: topic.trim() } : {}) }),
+        body: JSON.stringify({
+          title: title.trim(),
+          topic: topic.trim(),
+          settings: {
+            genre,
+            durationSeconds,
+            aspectRatio,
+          },
+        }),
       });
       if (!response.ok) throw new Error("Project creation failed.");
       createProjectResponseSchema.parse(await response.json());
       setTitle("");
       setTopic("");
+      setGenre("");
+      setDurationSeconds(null);
+      setAspectRatio(null);
       if (status !== "active") setStatus("active");
       else await loadProjects("active");
     } catch {
@@ -108,9 +122,36 @@ export function ProjectsWorkspace({
           </div>
         </div>
 
-        {status === "active" && <form className="project-create" onSubmit={createProject}>
-          <div><p className="eyebrow">NEW PROJECT</p><h2>Start with an idea</h2><p>Give your next video a working title. You can refine it anytime.</p></div>
-          <div className="project-create-fields"><label className="sr-only" htmlFor="project-title">Project title</label><input id="project-title" required maxLength={120} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. The curious seed" /><label className="sr-only" htmlFor="project-topic">Topic (optional)</label><input id="project-topic" maxLength={2000} value={topic} onChange={(event) => setTopic(event.target.value)} placeholder="What is your video about? (optional)" /><button className="primary-button" disabled={working || !title.trim()} type="submit">{working ? "Creating…" : "Create project"}<span aria-hidden="true">→</span></button></div>
+        {status === "active" && <form className="project-create idea-setup" onSubmit={createProject}>
+          <div className="idea-setup-heading">
+            <p className="eyebrow">NEW VIDEO · STEP 1 OF 4</p>
+            <div className="idea-step-track" aria-hidden="true"><span /></div>
+            <h2>Start with your idea</h2>
+            <p>Set the direction for your video. You can review the creative plan before anything is generated.</p>
+          </div>
+          <div className="idea-setup-fields">
+            <label className="field" htmlFor="project-title"><span>Working title</span><input id="project-title" required maxLength={120} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. The curious seed" /></label>
+            <label className="field" htmlFor="project-topic"><span>Your video idea</span><textarea id="project-topic" required maxLength={2000} value={topic} onChange={(event) => setTopic(event.target.value)} placeholder="What should happen in your video? Add the topic, story, or message you want to share." /></label>
+            <fieldset className="idea-choice-group">
+              <legend>Choose a direction</legend>
+              <div className="idea-choice-grid">
+                <button type="button" aria-pressed={genre === "cartoon"} className={genre === "cartoon" ? "idea-choice selected" : "idea-choice"} onClick={() => setGenre("cartoon")}><span>Cartoon</span><small>Character-led visual storytelling</small></button>
+                <button type="button" aria-pressed={genre === "educational"} className={genre === "educational" ? "idea-choice selected" : "idea-choice"} onClick={() => setGenre("educational")}><span>Educational</span><small>Explain a topic in clear scenes</small></button>
+              </div>
+            </fieldset>
+            <div className="idea-choice-row">
+              <fieldset className="idea-choice-group">
+                <legend>Target duration <span className="provisional-note">proposed</span></legend>
+                <div className="idea-pills">{[30, 60, 90].map((seconds) => <button type="button" key={seconds} aria-pressed={durationSeconds === seconds} className={durationSeconds === seconds ? "idea-pill selected" : "idea-pill"} onClick={() => setDurationSeconds(seconds)}>{seconds}s</button>)}</div>
+              </fieldset>
+              <fieldset className="idea-choice-group">
+                <legend>Video format <span className="provisional-note">proposed</span></legend>
+                <div className="idea-pills">{[{ label: "Vertical", value: "9:16" }, { label: "Landscape", value: "16:9" }, { label: "Square", value: "1:1" }].map((format) => <button type="button" key={format.value} aria-pressed={aspectRatio === format.value} className={aspectRatio === format.value ? "idea-pill selected" : "idea-pill"} onClick={() => setAspectRatio(format.value)}>{format.label}</button>)}</div>
+              </fieldset>
+            </div>
+            <p className="idea-provisional-copy">Duration and format are starting options from the design; final supported presets are still being confirmed.</p>
+            <button className="primary-button idea-save" disabled={working || !title.trim() || !topic.trim() || !genre || !durationSeconds || !aspectRatio} type="submit">{working ? "Saving your idea…" : "Save idea as a draft"}<span aria-hidden="true">→</span></button>
+          </div>
         </form>}
 
         {error && <p className="form-feedback error" role="alert">{error}</p>}

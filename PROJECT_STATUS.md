@@ -24,7 +24,7 @@
 | Design | Google Stitch project exists and has been iterated; latest full-project QA is incomplete |
 | Requirements and technical specs | PRD, System Design, and API Design exist as review drafts in `C:\Users\Chetan\Downloads`; they are not yet in this repository |
 | Repository contents | Initial scaffold and design/status docs committed as `8090b62`; `main` is stable and ongoing work is on `dev`, tracking `origin/dev` |
-| Immediate priority | Restore Atlas connectivity and rerun project lifecycle checks; verify CORS for both local hostnames and stale revision rejection; complete the owner-entered password change and sign-in verification |
+| Immediate priority | Complete the user-owned password update and verification; continue Phase B with the Stitch-guided New Video idea setup, then select the AI and job providers before enabling brainstorm or paid generation |
 
 ## Product and architecture baseline
 
@@ -125,7 +125,7 @@ Update each row as work changes. Add links to PRs, commits, screenshots, test re
 | Phase | Scope | Status | Exit criteria |
 |---|---|---|---|
 | A — Foundation | App structure, shared schemas, authentication, private workspace ownership, project CRUD, database indexes, API docs, local dev setup | In progress | Starter apps/contracts created; MongoDB/API design is now drafted; exit criteria not met until auth and owned project CRUD work | Review the database/API proposal and settle adapter/local DB setup; then implement database readiness and the project slice in small steps |
-| B — Creation and generation | Ideas/scripts, versioned storyboard, uploads, voice/audio, async provider jobs, progress/retries | Not started | User can generate a topic and recover/retry without duplicate provider calls or losing successful assets |
+| B — Creation and generation | Ideas/scripts, versioned storyboard, uploads, voice/audio, async provider jobs, progress/retries | In progress | First New Video setup step captures an idea plus provisional genre/duration/format and saves it as an owner-scoped draft; remaining storyboard, provider jobs and progress/recovery are not implemented |
 | C — Rendering | Remotion composition, render adapters, output validation, R2 persistence, preview/download | Not started | Verified MP4 rendered, stored durably, and previewed/downloaded from the app |
 | D — Instagram | Meta OAuth, account lifecycle, reviewed post draft, explicit approval, publish job and reconciliation | Not started | Approved post publishes once to an eligible account and visible status is reconciled |
 | E — Hardening | Security, quotas, cost/usage, observability, backups, recovery, load testing and deployment | Not started | Operational runbooks and documented recovery from worker/provider failures |
@@ -187,6 +187,7 @@ This is the persistent test-case register. Update **Status**, **Actual result / 
 | T-047 | Default web/API origin alignment: send credentialed CORS preflight from the README web origin | `http://localhost:3000` receives an exact matching `Access-Control-Allow-Origin` | Passed | Live preflight returned HTTP 204 and `Access-Control-Allow-Origin: http://localhost:3000`; 127.0.0.1 origin also returned its exact match. Credentials allowed for both | 2026-11-04 |
 | T-048 | Stale project update protection: submit update with an outdated project revision | Stale revision is rejected and current project data is preserved | Passed | Live Atlas check: current revision update returned 200 and revision 2; replaying revision 1 returned 409 `STALE_REVISION`; a follow-up read confirmed the latest title/revision were unchanged | 2026-11-04 |
 | T-049 | Archive retry after a lost response: archive a project twice as the owner | Both requests return 200 with archived status; retry does not increment revision again; foreign/missing project remains 404 | Passed | Live Atlas check: initial archive and retry both returned 200 with archived status; retry preserved the revision; a missing project still returned 404. Disposable account and related records were removed | 2026-11-04 |
+| T-050 | New Video idea setup: submit a draft with required title, idea, genre, duration and format | Missing required selections block submission; valid selections persist in the created project settings | Not run | UI and shared request schema updated to capture the first Stitch-guided setup step; runtime persistence and responsive visual review remain outstanding | — |
 
 ### Test execution update log
 
@@ -254,6 +255,9 @@ This is the persistent test-case register. Update **Status**, **Actual result / 
 
 | 2026-11-04 | T-044–T-046, T-048 | Restored Atlas connectivity after owner added the current IP and ran authenticated project lifecycle QA | Readiness returned 200 with database connected. Two disposable users verified create, detail, workspace isolation, update/revision conflict behavior, archive/list/restore, unauthenticated rejection and validation. All created projects, users, sessions, workspaces and related records were cleaned up. Fresh reset email was observed in Gmail and opened the local reset form with a token. Password submission remains owner handoff; sign-in/revocation checks remain pending |
 | 2026-11-04 | P2 archive retry reliability | Archive now returns the existing archived project on a repeated owner request, with no second revision increment; OpenAPI documents retry semantics | API build passed; Atlas regression check passed for first archive, retry response/revision stability, missing-project 404, and disposable-data cleanup |
+| 2026-11-04 | Started Phase B with the Stitch-guided New Video idea setup | Added the first setup step to capture user-authored idea, genre, proposed duration and format in an owner-scoped draft; provider-backed brainstorming and generation remain gated by open PRD decisions | Implementation and design alignment recorded; T-050 not run. Stitch canvas was unavailable at useful zoom, so followed the saved Stitch design brief and prior frame review notes |
+
+| 2026-11-04 | Retested current API/web code on user request | API and web typechecks and API build passed. Live API health/readiness returned 200. Credentialed preflights for both loopback origins returned 204 with matching origins. Temporary-user integration passed create/detail/update, revision 1-to-2, stale replay returning 409 with latest data preserved, missing-revision 400, archive, active/archived listing, restore, and unauthenticated 401. Temporary user, project, and workspace cleanup verified | Cross-workspace and invalid-ID cases were covered by the earlier live lifecycle run above; this run's stale write was sequential replay against stored data |
 
 ## Update rules for future sessions
 

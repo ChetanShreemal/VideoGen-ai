@@ -102,6 +102,44 @@ export const listProjectsResponseSchema = z.object({
 
 export const projectResponseEnvelopeSchema = z.object({ data: z.object({ project: projectResponseSchema }).strict() }).strict();
 
+export const storyboardSceneSchema = z.object({
+  id: z.string().trim().min(1).max(80),
+  title: z.string().trim().min(1).max(120),
+  narration: z.string().trim().max(4_000),
+  visualDescription: z.string().trim().max(2_000),
+  caption: z.string().trim().max(500),
+  durationSeconds: z.number().int().min(1).max(600),
+  transition: z.string().trim().max(80),
+  characterReferences: z.array(z.string().trim().min(1).max(120)).max(20).default([]),
+}).strict();
+
+export const storyboardContentSchema = z.object({
+  hook: z.string().trim().max(2_000).default(""),
+  closing: z.string().trim().max(2_000).default(""),
+  scenes: z.array(storyboardSceneSchema).min(1).max(50),
+}).strict().refine((value) => new Set(value.scenes.map((scene) => scene.id)).size === value.scenes.length, "Scene IDs must be unique.");
+export type StoryboardContent = z.infer<typeof storyboardContentSchema>;
+
+export const saveStoryboardRequestSchema = z.object({
+  expectedRevision: z.number().int().positive().optional(),
+  content: storyboardContentSchema,
+}).strict();
+export type SaveStoryboardRequest = z.infer<typeof saveStoryboardRequestSchema>;
+
+export const storyboardResponseSchema = z.object({
+  id: z.string().min(1),
+  projectId: z.string().min(1),
+  version: z.number().int().positive(),
+  status: z.enum(["draft", "approved"]),
+  revision: z.number().int().positive(),
+  content: storyboardContentSchema,
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+}).strict();
+export type StoryboardResponse = z.infer<typeof storyboardResponseSchema>;
+export const storyboardEnvelopeSchema = z.object({ data: z.object({ storyboard: storyboardResponseSchema }).strict() }).strict();
+export const storyboardListEnvelopeSchema = z.object({ data: z.object({ items: z.array(storyboardResponseSchema) }).strict() }).strict();
+
 export const apiErrorResponseSchema = z.object({
   error: z.object({
     code: z.string().min(1),

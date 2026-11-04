@@ -9,11 +9,15 @@ import {
   listProjectsResponseSchema,
   projectIdParamsSchema,
   projectResponseEnvelopeSchema,
+  saveStoryboardRequestSchema,
+  storyboardEnvelopeSchema,
+  storyboardListEnvelopeSchema,
   updateProjectRequestSchema,
   unauthenticatedResponseSchema,
 } from "@videogen/contracts";
 import type { createAuth } from "../auth.js";
 import { InvalidProjectCursorError, ProjectRepository, StaleProjectRevisionError } from "./project-repository.js";
+import { StaleStoryboardRevisionError, StoryboardRepository } from "./storyboard-repository.js";
 
 type ProjectAuth = ReturnType<typeof createAuth>;
 
@@ -41,6 +45,7 @@ export async function registerProjectRoutes(
   app: FastifyInstance,
   auth: ProjectAuth,
   projects: ProjectRepository,
+  storyboards: StoryboardRepository,
 ): Promise<void> {
   app.post("/api/v1/projects", async (request, reply) => {
     const ownerUserId = await requireUser(request, reply, auth);
@@ -139,6 +144,73 @@ export async function registerProjectRoutes(
     } catch {
       request.log.error("Project restore failed.");
       return sendError(reply, 503, "PROJECTS_UNAVAILABLE", "Projects are temporarily unavailable.");
+    }
+  });
+
+  app.get("/api/v1/projects/:projectId/storyboards", async (request, reply) => {
+    const ownerUserId = await requireUser(request, reply, auth);
+    if (!ownerUserId) return;
+    const params = projectIdParamsSchema.safeParse(request.params);
+    if (!params.success) return sendError(reply, 400, "VALIDATION_ERROR", "Project ID is invalid.");
+    try {
+      const items = await storyboards.list(ownerUserId, new ObjectId(params.data.projectId));
+      if (!items) return sendError(reply, 404, "PROJECT_NOT_FOUND", "Project was not found.");
+      return reply.send(storyboardListEnvelopeSchema.parse({ data: { items } }));
+    } catch {
+      request.log.error("Storyboard retrieval failed.");
+      return sendError(reply, 503, "STORYBOARDS_UNAVAILABLE", "Storyboards are temporarily unavailable.");
+    }
+  });
+
+  app.post("/api/v1/projects/:projectId/storyboards", async (request, reply) => {
+    const ownerUserId = await requireUser(request, reply, auth);
+    if (!ownerUserId) return;
+    const params = projectIdParamsSchema.safeParse(request.params);
+    const input = saveStoryboardRequestSchema.safeParse(request.body);
+    if (!params.success || !input.success || input.data.expectedRevision !== undefined) return sendError(reply, 400, "VALIDATION_ERROR", "New storyboard content is invalid.");
+    try {
+      const storyboard = await storyboards.createVersion(ownerUserId, new ObjectId(params.data.projectId), input.data.content);
+      if (!storyboard) return sendError(reply, 404, "PROJECT_NOT_FOUND", "Active project was not found.");
+      return reply.status(201).send(storyboardEnvelopeSchema.parse({ data: { storyboard } }));
+    } catch {
+      request.log.error("Storyboard creation failed.");
+      return sendError(reply, 503, "STORYBOARDS_UNAVAILABLE", "Storyboards are temporarily unavailable.");
+    }
+  });
+
+  app.patch("/api/v1/projects/:projectId/storyboards/:storyboardId", async (request, reply) => {
+    const ownerUserId = await requireUser(request, reply, auth);
+    if (!ownerUserId) return;
+    const params = request.params as { projectId?: string; storyboardId?: string };
+    if (!/^[a-f\d]{24}$/i.test(params.projectId ?? "") || !/^[a-f\d]{24}$/i.test(params.storyboardId ?? "")) return sendError(reply, 400, "VALIDATION_ERROR", "Storyboard ID is invalid.");
+    const input = saveStoryboardRequestSchema.safeParse(request.body);
+    if (!input.success || input.data.expectedRevision === undefined) return sendError(reply, 400, "VALIDATION_ERROR", "Expected revision and storyboard content are required.");
+    try {
+      const storyboard = await storyboards.updateDraft(ownerUserId, new ObjectId(params.projectId!), new ObjectId(params.storyboardId!), input.data.expectedRevision, input.data.content);
+      if (!storyboard) return sendError(reply, 404, "STORYBOARD_NOT_FOUND", "Draft storyboard was not found.");
+      return reply.send(storyboardEnvelopeSchema.parse({ data: { storyboard } }));
+    } catch (error) {
+      if (error instanceof StaleStoryboardRevisionError) return sendError(reply, 409, "STALE_REVISION", "This storyboard changed or was approved. Reload before saving.");
+      request.log.error("Storyboard update failed.");
+      return sendError(reply, 503, "STORYBOARDS_UNAVAILABLE", "Storyboards are temporarily unavailable.");
+    }
+  });
+
+  app.post("/api/v1/projects/:projectId/storyboards/:storyboardId/approve", async (request, reply) => {
+    const ownerUserId = await requireUser(request, reply, auth);
+    if (!ownerUserId) return;
+    const params = request.params as { projectId?: string; storyboardId?: string };
+    if (!/^[a-f\d]{24}$/i.test(params.projectId ?? "") || !/^[a-f\d]{24}$/i.test(params.storyboardId ?? "")) return sendError(reply, 400, "VALIDATION_ERROR", "Storyboard ID is invalid.");
+    const body = request.body as { expectedRevision?: unknown };
+    if (!body || !Number.isSafeInteger(body.expectedRevision) || (body.expectedRevision as number) < 1) return sendError(reply, 400, "VALIDATION_ERROR", "Expected revision is required.");
+    try {
+      const storyboard = await storyboards.approve(ownerUserId, new ObjectId(params.projectId!), new ObjectId(params.storyboardId!), body.expectedRevision as number);
+      if (!storyboard) return sendError(reply, 404, "STORYBOARD_NOT_FOUND", "Draft storyboard was not found.");
+      return reply.send(storyboardEnvelopeSchema.parse({ data: { storyboard } }));
+    } catch (error) {
+      if (error instanceof StaleStoryboardRevisionError) return sendError(reply, 409, "STALE_REVISION", "This storyboard changed or was already approved.");
+      request.log.error("Storyboard approval failed.");
+      return sendError(reply, 503, "STORYBOARDS_UNAVAILABLE", "Storyboards are temporarily unavailable.");
     }
   });
 }

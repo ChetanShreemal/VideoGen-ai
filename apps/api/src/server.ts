@@ -13,6 +13,7 @@ import { createAuth } from "./auth.js";
 import { config, trustedWebOrigins } from "./config.js";
 import { registerProjectRoutes } from "./projects/project-routes.js";
 import { ProjectRepository } from "./projects/project-repository.js";
+import { StoryboardRepository } from "./projects/storyboard-repository.js";
 
 if (config.MONGODB_DNS_SERVERS?.length) {
   setServers(config.MONGODB_DNS_SERVERS);
@@ -33,13 +34,14 @@ const database = new MongoDatabase({
 });
 const auth = createAuth(database);
 const projectRepository = new ProjectRepository(database, config.BETTER_AUTH_SECRET);
+const storyboardRepository = new StoryboardRepository(database);
 
 await app.register(fastifyCors, {
   origin: trustedWebOrigins,
   credentials: true,
 });
 
-await registerProjectRoutes(app, auth, projectRepository);
+await registerProjectRoutes(app, auth, projectRepository, storyboardRepository);
 
 app.route({
   method: ["GET", "POST"],

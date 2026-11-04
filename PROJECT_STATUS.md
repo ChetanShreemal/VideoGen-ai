@@ -24,7 +24,7 @@
 | Design | Google Stitch project exists and has been iterated; latest full-project QA is incomplete |
 | Requirements and technical specs | PRD, System Design, and API Design exist as review drafts in `C:\Users\Chetan\Downloads`; they are not yet in this repository |
 | Repository contents | Initial scaffold and design/status docs committed as `8090b62`; `main` is stable and ongoing work is on `dev`, tracking `origin/dev` |
-| Immediate priority | Complete the user-owned password update and verification; continue Phase B with the Stitch-guided New Video idea setup, then select the AI and job providers before enabling brainstorm or paid generation |
+| Immediate priority | Verify the manual storyboard draft flow, then decide AI script provider, voice options, job orchestration and cost controls before enabling provider-backed brainstorming or generation |
 
 ## Product and architecture baseline
 
@@ -125,7 +125,7 @@ Update each row as work changes. Add links to PRs, commits, screenshots, test re
 | Phase | Scope | Status | Exit criteria |
 |---|---|---|---|
 | A — Foundation | App structure, shared schemas, authentication, private workspace ownership, project CRUD, database indexes, API docs, local dev setup | In progress | Starter apps/contracts created; MongoDB/API design is now drafted; exit criteria not met until auth and owned project CRUD work | Review the database/API proposal and settle adapter/local DB setup; then implement database readiness and the project slice in small steps |
-| B — Creation and generation | Ideas/scripts, versioned storyboard, uploads, voice/audio, async provider jobs, progress/retries | In progress | First New Video setup step captures an idea plus provisional genre/duration/format and saves it as an owner-scoped draft; remaining storyboard, provider jobs and progress/recovery are not implemented |
+| B — Creation and generation | Ideas/scripts, versioned storyboard, uploads, voice/audio, async provider jobs, progress/retries | In progress | Idea setup and first manual versioned storyboard editor/API are implemented; storyboard runtime verification, AI provider jobs, uploads, audio and progress/recovery remain |
 | C — Rendering | Remotion composition, render adapters, output validation, R2 persistence, preview/download | Not started | Verified MP4 rendered, stored durably, and previewed/downloaded from the app |
 | D — Instagram | Meta OAuth, account lifecycle, reviewed post draft, explicit approval, publish job and reconciliation | Not started | Approved post publishes once to an eligible account and visible status is reconciled |
 | E — Hardening | Security, quotas, cost/usage, observability, backups, recovery, load testing and deployment | Not started | Operational runbooks and documented recovery from worker/provider failures |
@@ -188,6 +188,8 @@ This is the persistent test-case register. Update **Status**, **Actual result / 
 | T-048 | Stale project update protection: submit update with an outdated project revision | Stale revision is rejected and current project data is preserved | Passed | Live Atlas check: current revision update returned 200 and revision 2; replaying revision 1 returned 409 `STALE_REVISION`; a follow-up read confirmed the latest title/revision were unchanged | 2026-11-04 |
 | T-049 | Archive retry after a lost response: archive a project twice as the owner | Both requests return 200 with archived status; retry does not increment revision again; foreign/missing project remains 404 | Passed | Live Atlas check: initial archive and retry both returned 200 with archived status; retry preserved the revision; a missing project still returned 404. Disposable account and related records were removed | 2026-11-04 |
 | T-050 | New Video idea setup: submit a draft with required title, idea, genre, duration and format | Missing required selections block submission; valid selections persist in the created project settings | Not run | UI and shared request schema updated to capture the first Stitch-guided setup step; runtime persistence and responsive visual review remain outstanding | — |
+| T-051 | Storyboard API: create versions, list owner-scoped versions, edit with expectedRevision, approve and retry stale/approved writes | New versions increment; stale writes return 409; approved versions are immutable; foreign projects return 404 | Not run | Versioned storyboard repository/routes and shared strict contracts implemented; live Atlas behavior remains unverified | — |
+| T-052 | Storyboard UI: open project, create/edit ordered scenes, save/reload, reorder/add/remove, approve and create a new version | Scene-card content persists; approved version is read-only; new version is editable; narrow layouts remain usable | Not run | Stitch-inspired manual scene-card workspace implemented with Roboto/dark/orange style; browser/responsive QA remains | — |
 
 ### Test execution update log
 
@@ -267,3 +269,5 @@ This is the persistent test-case register. Update **Status**, **Actual result / 
 4. Move resolved items out of open issue lists but retain their outcome in the session log.
 5. Add new requirements, defects, decisions, and blockers here instead of leaving them only in chat.
 6. Keep draft/proposed decisions labeled as such until explicitly approved.
+
+| 2026-11-04 | Started the manual Script and Storyboard feature slice using the saved Google Stitch design brief | Added strict scene/storyboard contracts, workspace-scoped MongoDB version documents, create/list/update/approve API routes with optimistic revision checks, OpenAPI documentation, and a responsive ordered scene-card editor with manual versioning. No AI provider or paid generation is called. API/contracts/web typechecks passed; no runtime/API integration or browser QA was run | Run T-051 and T-052 against Atlas and in the browser; review duration warning/scene content behavior before enabling provider-backed script drafting |

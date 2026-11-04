@@ -125,7 +125,9 @@ export default function HomePage() {
 
       if (result.error) {
         setFeedbackType("error");
-        setFeedback("The email or password is incorrect.");
+        setFeedback("The email or password is incorrect. If your browser filled in the password, check your saved password or use Forgot password.");
+        setPassword("");
+        setShowPassword(false);
         return;
       }
 
@@ -218,6 +220,8 @@ export default function HomePage() {
                       {mode === "sign-in" && (
                         <button className="text-link text-button" onClick={() => {
                           setMode("forgot-password");
+                          setPassword("");
+                          setShowPassword(false);
                           setFeedback("");
                           setFeedbackType("");
                         }} type="button">Forgot password?</button>

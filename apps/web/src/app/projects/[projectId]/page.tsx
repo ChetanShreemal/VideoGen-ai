@@ -37,6 +37,8 @@ export default function ProjectDetailsPage() {
     }
     let current = true;
     setLoading(true);
+    setStoryboards([]);
+    setStoryboardContent(null);
     void fetch(`${apiBaseURL}/projects/${projectId}`, { credentials: "include", cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) throw new Error("Project unavailable");
@@ -53,7 +55,7 @@ export default function ProjectDetailsPage() {
               if (current) {
                 setStoryboards(payload.data.items);
                 const latest = payload.data.items[0];
-                if (latest) setStoryboardContent(latest.content);
+                setStoryboardContent(latest?.content ?? null);
               }
             })
             .catch(() => { if (current) setError("Storyboard details could not be loaded."); })

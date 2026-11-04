@@ -134,7 +134,7 @@ Update each row as work changes. Add links to PRs, commits, screenshots, test re
 
 | ID | Work item | Status | Completion / verification evidence | Next action |
 |---|---|---|---|---|
-| AUD-01 | Persist narration volume, music volume, and music enabled preferences per project | In progress | Shared Zod/OpenAPI contract, project detail controls and owner-scoped revision-checked PATCH persistence are implemented. API/web typechecks pass; browser confirmed music toggle enables/disables the music slider. Saved preference persistence has not yet been exercised | Verify defaults, save/reload, stale revision behavior, and responsive layouts; keep voice selection/audio generation gated on provider validation |
+| AUD-01 | Persist narration volume, music volume, and music enabled preferences per project | Done | Shared Zod/OpenAPI contract, project detail controls and owner-scoped revision-checked PATCH persistence are implemented. Live API verified save/reload and rejected out-of-range volume; browser verified save/reload and responsive layouts at desktop, tablet and phone widths | Decide supported voice/language matrix and validate the provider before implementing voice selection or audio generation |
 | ASSET-01 | Confirm upload formats, byte/duration limits, R2 configuration, retention, and deletion rules | Decision needed | PRD §13.3 leaves supported uploads, size limits, private R2 retention/deletion and signed access unresolved | Set product limits and provision least-privilege R2 configuration before implementing upload routes |
 
 ### F. Testing and verification

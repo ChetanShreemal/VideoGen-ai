@@ -39,6 +39,7 @@ const storyboardRepository = new StoryboardRepository(database);
 await app.register(fastifyCors, {
   origin: trustedWebOrigins,
   credentials: true,
+  methods: ["GET", "HEAD", "POST", "PATCH", "OPTIONS"],
 });
 
 await registerProjectRoutes(app, auth, projectRepository, storyboardRepository);

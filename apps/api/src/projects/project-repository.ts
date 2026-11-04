@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { ObjectId, type Collection, type Db, type Document } from "mongodb";
 import { z } from "zod";
-import type { CreateProjectRequest, ListProjectsQuery, ProjectResponse } from "@videogen/contracts";
+import type { CreateProjectRequest, ListProjectsQuery, ProjectResponse, UpdateProjectRequest } from "@videogen/contracts";
 import type { MongoDatabase } from "@videogen/database";
 
 interface WorkspaceDocument extends Document {
@@ -27,6 +27,7 @@ interface ProjectDocument extends Document {
 
 const cursorPayloadSchema = z.object({
   workspaceId: z.string().regex(/^[a-f\d]{24}$/i),
+  status: z.enum(["active", "archived"]),
   updatedAt: z.iso.datetime(),
   id: z.string().regex(/^[a-f\d]{24}$/i),
 }).strict();
@@ -79,10 +80,10 @@ export class ProjectRepository {
 
   async list(ownerUserId: string, query: ListProjectsQuery): Promise<{ items: ProjectResponse[]; nextCursor: string | null }> {
     const workspaceId = await this.ensurePersonalWorkspace(ownerUserId);
-    const cursor = query.cursor ? this.decodeCursor(query.cursor, workspaceId) : undefined;
+    const cursor = query.cursor ? this.decodeCursor(query.cursor, workspaceId, query.status) : undefined;
     const filter: Document = {
       workspaceId,
-      status: "active",
+      status: query.status,
       ...(cursor
         ? {
             $or: [
@@ -98,8 +99,53 @@ export class ProjectRepository {
     const last = page.at(-1);
     return {
       items: page.map((project) => this.toResponse(project)),
-      nextCursor: hasMore && last ? this.encodeCursor(workspaceId, last) : null,
+      nextCursor: hasMore && last ? this.encodeCursor(workspaceId, query.status, last) : null,
     };
+  }
+
+  async get(ownerUserId: string, projectId: ObjectId): Promise<ProjectResponse | null> {
+    const workspaceId = await this.ensurePersonalWorkspace(ownerUserId);
+    const project = await this.projects.findOne({ _id: projectId, workspaceId });
+    return project ? this.toResponse(project) : null;
+  }
+
+  async update(ownerUserId: string, projectId: ObjectId, input: UpdateProjectRequest): Promise<ProjectResponse | null> {
+    const workspaceId = await this.ensurePersonalWorkspace(ownerUserId);
+    const set: Document = { updatedAt: new Date() };
+    if (input.title !== undefined) set.title = input.title;
+    if (input.topic !== undefined) {
+      if (input.topic !== null && input.topic !== "") set.topic = input.topic;
+    }
+    if (input.settings !== undefined) set.settings = input.settings;
+    const update: Document = { $set: set, $inc: { revision: 1 } };
+    if (input.topic === null || input.topic === "") update.$unset = { topic: "" };
+    const result = await this.projects.findOneAndUpdate(
+      { _id: projectId, workspaceId, status: "active" }, update, { returnDocument: "after" },
+    );
+    return result ? this.toResponse(result) : null;
+  }
+
+  async archive(ownerUserId: string, projectId: ObjectId): Promise<ProjectResponse | null> {
+    return this.changeStatus(ownerUserId, projectId, "active", "archived");
+  }
+
+  async restore(ownerUserId: string, projectId: ObjectId): Promise<ProjectResponse | null> {
+    return this.changeStatus(ownerUserId, projectId, "archived", "active");
+  }
+
+  private async changeStatus(
+    ownerUserId: string,
+    projectId: ObjectId,
+    from: ProjectDocument["status"],
+    to: ProjectDocument["status"],
+  ): Promise<ProjectResponse | null> {
+    const workspaceId = await this.ensurePersonalWorkspace(ownerUserId);
+    const project = await this.projects.findOneAndUpdate(
+      { _id: projectId, workspaceId, status: from },
+      { $set: { status: to, updatedAt: new Date() }, $inc: { revision: 1 } },
+      { returnDocument: "after" },
+    );
+    return project ? this.toResponse(project) : null;
   }
 
   private async ensureInitialized(): Promise<void> {
@@ -134,9 +180,10 @@ export class ProjectRepository {
     };
   }
 
-  private encodeCursor(workspaceId: ObjectId, project: ProjectDocument): string {
+  private encodeCursor(workspaceId: ObjectId, status: "active" | "archived", project: ProjectDocument): string {
     const payload = Buffer.from(JSON.stringify({
       workspaceId: workspaceId.toHexString(),
+      status,
       updatedAt: project.updatedAt.toISOString(),
       id: project._id.toHexString(),
     })).toString("base64url");
@@ -144,7 +191,7 @@ export class ProjectRepository {
     return `${payload}.${signature}`;
   }
 
-  private decodeCursor(cursor: string, workspaceId: ObjectId): { updatedAt: Date; id: ObjectId } {
+  private decodeCursor(cursor: string, workspaceId: ObjectId, status: "active" | "archived"): { updatedAt: Date; id: ObjectId } {
     const [payload, signature, extra] = cursor.split(".");
     if (!payload || !signature || extra !== undefined) throw new InvalidProjectCursorError();
 
@@ -164,7 +211,7 @@ export class ProjectRepository {
       throw new InvalidProjectCursorError();
     }
     const parsed = cursorPayloadSchema.safeParse(raw);
-    if (!parsed.success || parsed.data.workspaceId !== workspaceId.toHexString()) throw new InvalidProjectCursorError();
+    if (!parsed.success || parsed.data.workspaceId !== workspaceId.toHexString() || parsed.data.status !== status) throw new InvalidProjectCursorError();
     return { updatedAt: new Date(parsed.data.updatedAt), id: new ObjectId(parsed.data.id) };
   }
 }

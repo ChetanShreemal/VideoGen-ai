@@ -3,7 +3,7 @@ info:
   title: VideoGen API
   version: 0.1.0
   description: >-
-    Initial API contract for the authenticated Projects create/list slice.
+    Authenticated, owner-scoped project creation, listing, details, updates, archive, and restore.
     Authentication is provided by the Better Auth session cookie.
 servers:
   - url: http://127.0.0.1:4000/api/v1
@@ -81,6 +81,14 @@ paths:
           schema:
             type: string
             minLength: 1
+        - name: status
+          in: query
+          required: false
+          description: Select active or archived projects; defaults to active.
+          schema:
+            type: string
+            enum: [active, archived]
+            default: active
       responses:
         '200':
           description: Project page
@@ -98,7 +106,133 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '503':
           $ref: '#/components/responses/ProjectsUnavailable'
+  /projects/{projectId}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      operationId: getProject
+      tags: [Projects]
+      summary: Get a project
+      description: Returns a project only when it belongs to the authenticated user's personal workspace.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Project details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+        '400':
+          description: Project ID is invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/ProjectNotFound'
+        '503':
+          $ref: '#/components/responses/ProjectsUnavailable'
+    patch:
+      operationId: updateProject
+      tags: [Projects]
+      summary: Update an active project
+      description: Updates the supplied project fields; an explicit null topic clears the topic.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProjectRequest'
+      responses:
+        '200':
+          description: Updated project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+        '400':
+          description: Project ID or changes are invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/ProjectNotFound'
+        '503':
+          $ref: '#/components/responses/ProjectsUnavailable'
+  /projects/{projectId}/archive:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    post:
+      operationId: archiveProject
+      tags: [Projects]
+      summary: Archive an active project
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Archived project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+        '400':
+          description: Project ID is invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/ProjectNotFound'
+        '503':
+          $ref: '#/components/responses/ProjectsUnavailable'
+  /projects/{projectId}/restore:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    post:
+      operationId: restoreProject
+      tags: [Projects]
+      summary: Restore an archived project
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Restored project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+        '400':
+          description: Project ID is invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/ProjectNotFound'
+        '503':
+          $ref: '#/components/responses/ProjectsUnavailable'
 components:
+  parameters:
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      description: 24-character MongoDB ObjectId.
+      schema:
+        type: string
+        pattern: '^[a-fA-F0-9]{24}$'
   securitySchemes:
     sessionCookie:
       type: apiKey
@@ -128,6 +262,16 @@ components:
             error:
               code: PROJECTS_UNAVAILABLE
               message: Projects are temporarily unavailable.
+    ProjectNotFound:
+      description: Project was not found in the authenticated user's workspace or is not in the requested state.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+          example:
+            error:
+              code: PROJECT_NOT_FOUND
+              message: Project was not found.
   schemas:
     ProjectSettings:
       type: object
@@ -170,6 +314,20 @@ components:
           maxLength: 2000
         settings:
           $ref: '#/components/schemas/ProjectSettings'
+    UpdateProjectRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+        topic:
+          type: [string, 'null']
+          maxLength: 2000
+        settings:
+          $ref: '#/components/schemas/ProjectSettings'
     Project:
       type: object
       additionalProperties: false
@@ -200,6 +358,18 @@ components:
           type: string
           format: date-time
     CreateProjectResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [project]
+          properties:
+            project:
+              $ref: '#/components/schemas/Project'
+    ProjectResponse:
       type: object
       additionalProperties: false
       required: [data]

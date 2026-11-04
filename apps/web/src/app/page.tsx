@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import type { FormEvent } from "react";
 import { currentUserResponseSchema } from "@videogen/contracts";
 import { apiBaseURL, authClient } from "@/lib/auth-client";
+import { ProjectsWorkspace } from "./projects-workspace";
 
 export default function HomePage() {
   const { data: session, isPending: sessionPending, refetch } = authClient.useSession();
@@ -175,30 +176,14 @@ export default function HomePage() {
           <a className="help-link" href="mailto:support@videogen.example">Need help?</a>
         </header>
 
-        <section className="auth-content" aria-labelledby="sign-in-title">
-          <div className="auth-form-panel">
+        <section className={`auth-content${session && protectedUser ? " is-workspace" : ""}`} aria-labelledby="sign-in-title">
+          <div className={session && protectedUser ? "workspace-container" : "auth-form-panel"}>
             {sessionPending ? (
               <p className="form-feedback info" role="status">Checking your session…</p>
             ) : session ? (
-              <div className="authenticated-panel">
-                <div className="form-heading">
-                  <p className="eyebrow">YOUR CREATIVE STUDIO</p>
-                  <h1 id="sign-in-title">You’re signed in</h1>
-                  <p className="form-subtitle">Your account session is active.</p>
-                </div>
-                <div className="session-card" aria-live="polite">
-                  <span className="session-indicator" aria-hidden="true" />
-                  <div>
-                    <strong>{session.user.name || session.user.email}</strong>
-                    <small>{checkingApiSession ? "Checking protected API…" : protectedUser ?? "API session could not be verified"}</small>
-                  </div>
-                </div>
-                {feedback && <p className={`form-feedback ${feedbackType}`} role="status">{feedback}</p>}
-                <button className="primary-button" disabled={submitting} onClick={handleSignOut} type="button">
-                  {submitting ? "Signing out…" : "Sign out"}
-                </button>
-                <p className="mock-note">Authentication connected · Project workspace is the next slice</p>
-              </div>
+              checkingApiSession || !protectedUser
+                ? <div className="authenticated-panel"><p className="form-feedback info" role="status">{checkingApiSession ? "Connecting your project workspace…" : "Project workspace could not be reached. Refresh to retry."}</p>{!checkingApiSession && <button className="quiet-button" onClick={() => window.location.reload()}>Retry</button>}<button className="quiet-button" disabled={submitting} onClick={handleSignOut}>Sign out</button></div>
+                : <ProjectsWorkspace name={session.user.name || session.user.email} email={protectedUser} onSignOut={() => void handleSignOut()} signingOut={submitting} />
             ) : (
               <>
                 <div className="form-heading">

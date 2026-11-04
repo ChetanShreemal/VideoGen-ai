@@ -53,9 +53,20 @@ export const createProjectRequestSchema = z.object({
 
 export type CreateProjectRequest = z.infer<typeof createProjectRequestSchema>;
 
+export const updateProjectRequestSchema = z.object({
+  title: z.string().trim().min(1).max(120).optional(),
+  topic: z.string().trim().max(2_000).nullable().optional(),
+  settings: projectSettingsSchema.optional(),
+}).strict().refine((value) => Object.keys(value).length > 0, "At least one project field is required.");
+
+export type UpdateProjectRequest = z.infer<typeof updateProjectRequestSchema>;
+
+export const projectIdParamsSchema = z.object({ projectId: z.string().regex(/^[a-f\d]{24}$/i) }).strict();
+
 export const listProjectsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   cursor: z.string().min(1).optional(),
+  status: z.enum(["active", "archived"]).default("active"),
 }).strict();
 
 export type ListProjectsQuery = z.infer<typeof listProjectsQuerySchema>;
@@ -83,6 +94,8 @@ export const listProjectsResponseSchema = z.object({
     nextCursor: z.string().min(1).nullable(),
   }).strict(),
 }).strict();
+
+export const projectResponseEnvelopeSchema = z.object({ data: z.object({ project: projectResponseSchema }).strict() }).strict();
 
 export const apiErrorResponseSchema = z.object({
   error: z.object({

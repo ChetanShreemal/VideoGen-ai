@@ -1,11 +1,15 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { fromNodeHeaders } from "better-auth/node";
+import { ObjectId } from "mongodb";
 import {
   apiErrorResponseSchema,
   createProjectRequestSchema,
   createProjectResponseSchema,
   listProjectsQuerySchema,
   listProjectsResponseSchema,
+  projectIdParamsSchema,
+  projectResponseEnvelopeSchema,
+  updateProjectRequestSchema,
   unauthenticatedResponseSchema,
 } from "@videogen/contracts";
 import type { createAuth } from "../auth.js";
@@ -69,6 +73,68 @@ export async function registerProjectRoutes(
         return sendError(reply, 400, "INVALID_CURSOR", "Project list cursor is invalid.");
       }
       request.log.error("Project listing failed.");
+      return sendError(reply, 503, "PROJECTS_UNAVAILABLE", "Projects are temporarily unavailable.");
+    }
+  });
+
+  app.get("/api/v1/projects/:projectId", async (request, reply) => {
+    const ownerUserId = await requireUser(request, reply, auth);
+    if (!ownerUserId) return;
+    const params = projectIdParamsSchema.safeParse(request.params);
+    if (!params.success) return sendError(reply, 400, "VALIDATION_ERROR", "Project ID is invalid.");
+    try {
+      const project = await projects.get(ownerUserId, new ObjectId(params.data.projectId));
+      if (!project) return sendError(reply, 404, "PROJECT_NOT_FOUND", "Project was not found.");
+      return reply.send(projectResponseEnvelopeSchema.parse({ data: { project } }));
+    } catch {
+      request.log.error("Project retrieval failed.");
+      return sendError(reply, 503, "PROJECTS_UNAVAILABLE", "Projects are temporarily unavailable.");
+    }
+  });
+
+  app.patch("/api/v1/projects/:projectId", async (request, reply) => {
+    const ownerUserId = await requireUser(request, reply, auth);
+    if (!ownerUserId) return;
+    const params = projectIdParamsSchema.safeParse(request.params);
+    if (!params.success) return sendError(reply, 400, "VALIDATION_ERROR", "Project ID is invalid.");
+    const input = updateProjectRequestSchema.safeParse(request.body);
+    if (!input.success) return sendError(reply, 400, "VALIDATION_ERROR", "Project changes are invalid.");
+    try {
+      const project = await projects.update(ownerUserId, new ObjectId(params.data.projectId), input.data);
+      if (!project) return sendError(reply, 404, "PROJECT_NOT_FOUND", "Active project was not found.");
+      return reply.send(projectResponseEnvelopeSchema.parse({ data: { project } }));
+    } catch {
+      request.log.error("Project update failed.");
+      return sendError(reply, 503, "PROJECTS_UNAVAILABLE", "Projects are temporarily unavailable.");
+    }
+  });
+
+  app.post("/api/v1/projects/:projectId/archive", async (request, reply) => {
+    const ownerUserId = await requireUser(request, reply, auth);
+    if (!ownerUserId) return;
+    const params = projectIdParamsSchema.safeParse(request.params);
+    if (!params.success) return sendError(reply, 400, "VALIDATION_ERROR", "Project ID is invalid.");
+    try {
+      const project = await projects.archive(ownerUserId, new ObjectId(params.data.projectId));
+      if (!project) return sendError(reply, 404, "PROJECT_NOT_FOUND", "Active project was not found.");
+      return reply.send(projectResponseEnvelopeSchema.parse({ data: { project } }));
+    } catch {
+      request.log.error("Project archive failed.");
+      return sendError(reply, 503, "PROJECTS_UNAVAILABLE", "Projects are temporarily unavailable.");
+    }
+  });
+
+  app.post("/api/v1/projects/:projectId/restore", async (request, reply) => {
+    const ownerUserId = await requireUser(request, reply, auth);
+    if (!ownerUserId) return;
+    const params = projectIdParamsSchema.safeParse(request.params);
+    if (!params.success) return sendError(reply, 400, "VALIDATION_ERROR", "Project ID is invalid.");
+    try {
+      const project = await projects.restore(ownerUserId, new ObjectId(params.data.projectId));
+      if (!project) return sendError(reply, 404, "PROJECT_NOT_FOUND", "Archived project was not found.");
+      return reply.send(projectResponseEnvelopeSchema.parse({ data: { project } }));
+    } catch {
+      request.log.error("Project restore failed.");
       return sendError(reply, 503, "PROJECTS_UNAVAILABLE", "Projects are temporarily unavailable.");
     }
   });

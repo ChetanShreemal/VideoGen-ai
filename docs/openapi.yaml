@@ -454,6 +454,22 @@ components:
           type: string
           minLength: 1
           maxLength: 128
+        audioMix:
+          type: object
+          additionalProperties: false
+          description: Stored mix preferences only; provider-backed playback/generation is not connected yet.
+          required: [narrationVolume, musicVolume, musicEnabled]
+          properties:
+            narrationVolume:
+              type: number
+              minimum: 0
+              maximum: 1
+            musicVolume:
+              type: number
+              minimum: 0
+              maximum: 1
+            musicEnabled:
+              type: boolean
     CreateProjectRequest:
       type: object
       additionalProperties: false

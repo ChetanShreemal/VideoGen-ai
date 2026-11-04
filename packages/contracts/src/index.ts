@@ -37,6 +37,12 @@ export const unauthenticatedResponseSchema = z.object({
 
 // Keep the value sets for language, visual style, aspect ratio, and voice open
 // until the product decisions in the PRD are finalized.
+export const projectAudioMixSchema = z.object({
+  narrationVolume: z.number().min(0).max(1),
+  musicVolume: z.number().min(0).max(1),
+  musicEnabled: z.boolean(),
+}).strict();
+
 export const projectSettingsSchema = z.object({
   genre: z.enum(["cartoon", "educational"]).optional(),
   durationSeconds: z.number().int().positive().optional(),
@@ -44,6 +50,7 @@ export const projectSettingsSchema = z.object({
   visualStyle: z.string().trim().min(1).max(80).optional(),
   aspectRatio: z.string().trim().min(1).max(16).optional(),
   voiceId: z.string().trim().min(1).max(128).optional(),
+  audioMix: projectAudioMixSchema.optional(),
 }).strict();
 
 export const createProjectRequestSchema = z.object({

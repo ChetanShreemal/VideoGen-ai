@@ -21,6 +21,9 @@ export default function ProjectDetailsPage() {
   const [project, setProject] = useState<ProjectResponse | null>(null);
   const [title, setTitle] = useState("");
   const [topic, setTopic] = useState("");
+  const [narrationVolume, setNarrationVolume] = useState(100);
+  const [musicVolume, setMusicVolume] = useState(20);
+  const [musicEnabled, setMusicEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
@@ -47,6 +50,9 @@ export default function ProjectDetailsPage() {
           setProject(result.data.project);
           setTitle(result.data.project.title);
           setTopic(result.data.project.topic ?? "");
+          setNarrationVolume(Math.round((result.data.project.settings.audioMix?.narrationVolume ?? 1) * 100));
+          setMusicVolume(Math.round((result.data.project.settings.audioMix?.musicVolume ?? 0.2) * 100));
+          setMusicEnabled(result.data.project.settings.audioMix?.musicEnabled ?? false);
           setStoryboardLoading(true);
           void fetch(`${apiBaseURL}/projects/${projectId}/storyboards`, { credentials: "include", cache: "no-store" })
             .then(async (storyboardResponse) => {
@@ -102,6 +108,44 @@ export default function ProjectDetailsPage() {
       setMessage(action === "archive" ? "Project archived. You can restore it from your archive." : "Project restored to your active projects.");
     } catch { setError(`Project could not be ${action === "archive" ? "archived" : "restored"}. Try again.`); }
     finally { setWorking(false); }
+  }
+
+  async function saveAudioMix() {
+    if (!project) return;
+    setWorking(true); setError(""); setMessage("");
+    const parsed = updateProjectRequestSchema.safeParse({
+      expectedRevision: project.revision,
+      settings: {
+        ...project.settings,
+        audioMix: {
+          narrationVolume: narrationVolume / 100,
+          musicVolume: musicVolume / 100,
+          musicEnabled,
+        },
+      },
+    });
+    if (!parsed.success) {
+      setError("Audio settings are invalid. Review the volume levels and try again.");
+      setWorking(false);
+      return;
+    }
+    try {
+      const response = await fetch(`${apiBaseURL}/projects/${projectId}`, {
+        method: "PATCH", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify(parsed.data),
+      });
+      if (response.status === 409) {
+        setError("This project changed since you opened it. Reload to get the latest settings before saving.");
+        return;
+      }
+      if (!response.ok) throw new Error("Audio settings could not be saved.");
+      const result = projectResponseEnvelopeSchema.parse(await response.json());
+      setProject(result.data.project);
+      setMessage("Audio preferences saved. They will apply when audio generation is connected.");
+    } catch {
+      setError("Audio preferences could not be saved. Try again.");
+    } finally {
+      setWorking(false);
+    }
   }
 
   const latestStoryboard = storyboards[0] ?? null;
@@ -160,6 +204,13 @@ export default function ProjectDetailsPage() {
         {error && <p className="form-feedback error" role="alert">{error}</p>}{message && <p className="form-feedback info" role="status">{message}</p>}
         <div className="detail-layout"><form className="detail-panel" onSubmit={save}><div><p className="eyebrow">PROJECT DETAILS</p><h2>Shape the starting point</h2><p className="detail-copy">These details stay with your project and can be changed as your story develops.</p></div><label className="field"><span>Project title</span><input required maxLength={120} disabled={project.status !== "active" || working} value={title} onChange={(event) => setTitle(event.target.value)} /></label><label className="field"><span>Video topic</span><textarea maxLength={2000} disabled={project.status !== "active" || working} value={topic} onChange={(event) => setTopic(event.target.value)} placeholder="Describe the idea behind this video" /></label>{project.status === "active" && <button className="primary-button" disabled={working} type="submit">{working ? "Saving…" : "Save changes"}<span aria-hidden="true">→</span></button>}</form>
           <aside className="detail-panel project-settings-panel"><p className="eyebrow">GENERATION SETTINGS</p><h2>Ready when you are</h2><p className="detail-copy">Set these up in a future step when you turn this idea into a video.</p><dl><div><dt>Duration</dt><dd>{project.settings.durationSeconds ? `${project.settings.durationSeconds}s` : "Not set"}</dd></div><div><dt>Language</dt><dd>{project.settings.language || "Not set"}</dd></div><div><dt>Visual style</dt><dd>{project.settings.visualStyle || "Not set"}</dd></div><div><dt>Aspect ratio</dt><dd>{project.settings.aspectRatio || "Not set"}</dd></div></dl></aside></div>
+        <section className="detail-panel audio-panel" aria-labelledby="audio-settings-title">
+          <div><p className="eyebrow">VOICE & AUDIO · STEP 3</p><h2 id="audio-settings-title">Audio mix</h2><p className="detail-copy">Set the balance for narration and background music. These are saved preferences; no audio is generated yet.</p></div>
+          <label className="field audio-range"><span>Narration volume <output>{narrationVolume}%</output></span><input aria-label="Narration volume" type="range" min="0" max="100" step="5" disabled={project.status !== "active" || working} value={narrationVolume} onChange={(event) => setNarrationVolume(Number(event.target.value))} /></label>
+          <label className="audio-toggle"><input type="checkbox" checked={musicEnabled} disabled={project.status !== "active" || working} onChange={(event) => setMusicEnabled(event.target.checked)} /><span>Include background music</span><small>Off by default. Choose a licensed track in a later step.</small></label>
+          <label className="field audio-range"><span>Music volume <output>{musicVolume}%</output></span><input aria-label="Music volume" type="range" min="0" max="100" step="5" disabled={!musicEnabled || project.status !== "active" || working} value={musicVolume} onChange={(event) => setMusicVolume(Number(event.target.value))} /></label>
+          {project.status === "active" && <button className="primary-button" disabled={working} onClick={() => void saveAudioMix()} type="button">{working ? "Saving…" : "Save audio preferences"}<span aria-hidden="true">→</span></button>}
+        </section>
         <section className="storyboard-panel detail-panel">
           <div className="storyboard-heading"><div><p className="eyebrow">CREATIVE PLAN · STEP 2</p><h2>Storyboard</h2><p className="detail-copy">Shape the story in ordered scenes. Nothing is generated from this draft.</p></div>{latestStoryboard && <span className={`status-pill ${latestStoryboard.status}`}>Version {latestStoryboard.version} · {latestStoryboard.status}</span>}</div>
           {storyboardLoading ? <p className="detail-copy">Loading storyboard…</p> : !storyboardContent ? <div className="storyboard-empty"><p>Turn your idea into a scene-by-scene plan.</p><button className="primary-button" disabled={working || !project.topic} onClick={() => { setStoryboardContent({ hook: project.topic ?? "", closing: "", scenes: [{ id: crypto.randomUUID(), title: "Opening scene", narration: project.topic ?? "", visualDescription: "Describe what the viewer sees", caption: "", durationSeconds: 8, transition: "Cut", characterReferences: [] }] }); }}>Start storyboard<span aria-hidden="true">→</span></button>{!project.topic && <small>Add a video topic above before starting.</small>}</div> : <>

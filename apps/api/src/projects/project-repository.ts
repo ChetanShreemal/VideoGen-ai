@@ -120,8 +120,14 @@ export class ProjectRepository {
     const update: Document = { $set: set, $inc: { revision: 1 } };
     if (input.topic === null || input.topic === "") update.$unset = { topic: "" };
     const result = await this.projects.findOneAndUpdate(
-      { _id: projectId, workspaceId, status: "active" }, update, { returnDocument: "after" },
+      { _id: projectId, workspaceId, status: "active", revision: input.expectedRevision }, update, { returnDocument: "after" },
     );
+    if (!result) {
+      const activeProject = await this.projects.findOne(
+        { _id: projectId, workspaceId, status: "active" }, { projection: { _id: 1 } },
+      );
+      if (activeProject) throw new StaleProjectRevisionError();
+    }
     return result ? this.toResponse(result) : null;
   }
 
@@ -232,5 +238,12 @@ export class InvalidProjectCursorError extends Error {
   constructor() {
     super("Invalid project cursor.");
     this.name = "InvalidProjectCursorError";
+  }
+}
+
+export class StaleProjectRevisionError extends Error {
+  constructor() {
+    super("Project revision is stale.");
+    this.name = "StaleProjectRevisionError";
   }
 }

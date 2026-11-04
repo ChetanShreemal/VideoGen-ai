@@ -10,7 +10,7 @@ servers:
     description: Local development API
 tags:
   - name: Projects
-    description: Owner-scoped project creation and listing
+    description: Owner-scoped project creation, reading, updating, and lifecycle management
 paths:
   /projects:
     post:
@@ -58,7 +58,7 @@ paths:
     get:
       operationId: listProjects
       tags: [Projects]
-      summary: List active projects
+      summary: List active or archived projects
       description: >-
         Returns projects owned by the authenticated user's personal workspace,
         ordered by updatedAt descending with a stable ID tie-breaker.
@@ -139,7 +139,9 @@ paths:
       operationId: updateProject
       tags: [Projects]
       summary: Update an active project
-      description: Updates the supplied project fields; an explicit null topic clears the topic.
+      description: >-
+        Updates the supplied project fields only when expectedRevision matches the current project revision;
+        an explicit null topic clears the topic. A successful update increments the revision.
       security:
         - sessionCookie: []
       requestBody:
@@ -165,6 +167,16 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '404':
           $ref: '#/components/responses/ProjectNotFound'
+        '409':
+          description: The project revision has changed since it was read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              example:
+                error:
+                  code: STALE_REVISION
+                  message: This project changed since you opened it. Reload and try again.
         '503':
           $ref: '#/components/responses/ProjectsUnavailable'
   /projects/{projectId}/archive:
@@ -317,8 +329,12 @@ components:
     UpdateProjectRequest:
       type: object
       additionalProperties: false
-      minProperties: 1
+      required: [expectedRevision]
       properties:
+        expectedRevision:
+          type: integer
+          minimum: 1
+          description: Revision returned by the last read; the update is applied only if it still matches.
         title:
           type: string
           minLength: 1

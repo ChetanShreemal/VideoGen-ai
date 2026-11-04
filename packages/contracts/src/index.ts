@@ -54,10 +54,14 @@ export const createProjectRequestSchema = z.object({
 export type CreateProjectRequest = z.infer<typeof createProjectRequestSchema>;
 
 export const updateProjectRequestSchema = z.object({
+  expectedRevision: z.number().int().positive(),
   title: z.string().trim().min(1).max(120).optional(),
   topic: z.string().trim().max(2_000).nullable().optional(),
   settings: projectSettingsSchema.optional(),
-}).strict().refine((value) => Object.keys(value).length > 0, "At least one project field is required.");
+}).strict().refine(
+  (value) => value.title !== undefined || value.topic !== undefined || value.settings !== undefined,
+  "At least one project field is required.",
+);
 
 export type UpdateProjectRequest = z.infer<typeof updateProjectRequestSchema>;
 

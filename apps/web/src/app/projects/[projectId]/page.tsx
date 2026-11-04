@@ -49,13 +49,17 @@ export default function ProjectDetailsPage() {
     event.preventDefault();
     setError("");
     setMessage("");
-    const parsed = updateProjectRequestSchema.safeParse({ title, topic: topic.trim() || null });
+    const parsed = updateProjectRequestSchema.safeParse({ expectedRevision: project?.revision, title, topic: topic.trim() || null });
     if (!parsed.success) { setError("Add a title up to 120 characters and a topic up to 2,000 characters."); return; }
     setWorking(true);
     try {
       const response = await fetch(`${apiBaseURL}/projects/${projectId}`, {
         method: "PATCH", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify(parsed.data),
       });
+      if (response.status === 409) {
+        setError("This project changed since you opened it. Reload to get the latest version before saving.");
+        return;
+      }
       if (!response.ok) throw new Error("Save failed");
       const result = projectResponseEnvelopeSchema.parse(await response.json());
       setProject(result.data.project);

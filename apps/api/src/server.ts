@@ -10,7 +10,7 @@ import {
 } from "@videogen/contracts";
 import { MongoDatabase } from "@videogen/database";
 import { createAuth } from "./auth.js";
-import { config } from "./config.js";
+import { config, trustedWebOrigins } from "./config.js";
 import { registerProjectRoutes } from "./projects/project-routes.js";
 import { ProjectRepository } from "./projects/project-repository.js";
 
@@ -35,7 +35,7 @@ const auth = createAuth(database);
 const projectRepository = new ProjectRepository(database, config.BETTER_AUTH_SECRET);
 
 await app.register(fastifyCors, {
-  origin: config.WEB_ORIGIN,
+  origin: trustedWebOrigins,
   credentials: true,
 });
 

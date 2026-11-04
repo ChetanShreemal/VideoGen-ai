@@ -66,9 +66,9 @@ The shared `@videogen/contracts` package defines strict Zod schemas for project 
 |---|---|
 | `POST /api/v1/projects` | Validate `{ title, topic?, settings? }`; derive workspace/user; return `201` and the created project. Do not enqueue paid work. |
 | `GET /api/v1/projects?limit=&cursor=` | List active projects for the session workspace, newest updated first with `_id` tie-breaker. Default `limit=20`, max `100`; return `{ items, nextCursor }`. |
-| `GET /api/v1/projects/:projectId` | Return one active project scoped to the session workspace. |
-| `PATCH /api/v1/projects/:projectId` | Accept only editable fields. Require `If-Match` revision; atomically update if the revision matches, increment revision, otherwise `409 STALE_REVISION`. |
-| `DELETE /api/v1/projects/:projectId` | Soft archive by setting `archivedAt` and status; return `204`. Repeating the request is safe. Physical cleanup is a separate retention workflow. |
+| `GET /api/v1/projects/:projectId` | Return one project scoped to the session workspace. |
+| `PATCH /api/v1/projects/:projectId` | Accept only editable fields and required `expectedRevision`; atomically update only if it matches, increment revision, otherwise return `409 STALE_REVISION`. |
+| `POST /api/v1/projects/:projectId/archive` | Soft archive an active project by changing its status; return the archived project. Physical cleanup is a separate retention workflow. |
 | `POST /api/v1/projects/:projectId/restore` | Restore an archived project owned by this workspace; return `200`. This explicit route is proposed to support the PRD resume/archive lifecycle. |
 
 Project response fields: `id`, `title`, `topic?`, `settings`, `status`, `revision`, `createdAt`, `updatedAt`, and optional storyboard/render summary references. Never return internal credentials, raw database documents, or private R2 keys. For project list cards, include summaries only; fetch detailed storyboard/asset data from their own authorized routes.
@@ -77,7 +77,7 @@ Project response fields: `id`, `title`, `topic?`, `settings`, `status`, `revisio
 
 - Validate request, persisted domain object, and API response with shared Zod schemas; strip/reject server-managed fields from writes.
 - Use stable `X-Request-Id` values for logs and error responses; logs must redact session cookies, tokens, credentials, and raw uploaded content.
-- Use `If-Match`/revision on editable project records. A successful update is a conditional single-document update, not read-then-write.
+- Require `expectedRevision` on project updates. A successful update is a conditional single-document update, not read-then-write; stale revisions return `409 STALE_REVISION`.
 - Use `Idempotency-Key` for generation, rendering, and publishing commands. Scope by workspace, operation and key; bind to a canonical request fingerprint. Same key and same request returns the original job/result; same key with a different request returns `409 IDEMPOTENCY_CONFLICT`.
 - Use cursor pagination with a signed/opaque cursor tied to the sort version and workspace. Do not accept raw Mongo query/sort/filter objects from clients.
 - Separate liveness from readiness: `GET /api/v1/health` confirms the process responds; `GET /api/v1/ready` reports unavailable until configuration and MongoDB ping succeed. Do not expose URI, host, database name, or driver error details.

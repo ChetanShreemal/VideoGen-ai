@@ -13,7 +13,7 @@ import {
   unauthenticatedResponseSchema,
 } from "@videogen/contracts";
 import type { createAuth } from "../auth.js";
-import { InvalidProjectCursorError, ProjectRepository } from "./project-repository.js";
+import { InvalidProjectCursorError, ProjectRepository, StaleProjectRevisionError } from "./project-repository.js";
 
 type ProjectAuth = ReturnType<typeof createAuth>;
 
@@ -103,7 +103,10 @@ export async function registerProjectRoutes(
       const project = await projects.update(ownerUserId, new ObjectId(params.data.projectId), input.data);
       if (!project) return sendError(reply, 404, "PROJECT_NOT_FOUND", "Active project was not found.");
       return reply.send(projectResponseEnvelopeSchema.parse({ data: { project } }));
-    } catch {
+    } catch (error) {
+      if (error instanceof StaleProjectRevisionError) {
+        return sendError(reply, 409, "STALE_REVISION", "This project changed since you opened it. Reload and try again.");
+      }
       request.log.error("Project update failed.");
       return sendError(reply, 503, "PROJECTS_UNAVAILABLE", "Projects are temporarily unavailable.");
     }

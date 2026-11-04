@@ -1,7 +1,7 @@
 import { betterAuth } from "better-auth";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
 import type { MongoDatabase } from "@videogen/database";
-import { config } from "./config.js";
+import { config, trustedWebOrigins } from "./config.js";
 import { sendPasswordResetEmail } from "./email.js";
 import { provisionPersonalWorkspace } from "./projects/project-repository.js";
 
@@ -13,7 +13,7 @@ export function createAuth(database: MongoDatabase) {
     secret: config.BETTER_AUTH_SECRET,
     baseURL: config.BETTER_AUTH_URL,
     basePath: "/api/v1/auth",
-    trustedOrigins: [config.WEB_ORIGIN],
+    trustedOrigins: trustedWebOrigins,
     databaseHooks: {
       user: {
         create: {

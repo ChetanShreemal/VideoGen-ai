@@ -26,3 +26,13 @@ if (!parsed.success) {
 }
 
 export const config = parsed.data;
+
+const primaryWebOrigin = new URL(config.WEB_ORIGIN);
+const originSet = new Set([primaryWebOrigin.origin]);
+if (primaryWebOrigin.hostname === "127.0.0.1" || primaryWebOrigin.hostname === "localhost") {
+  const localAlias = new URL(primaryWebOrigin.origin);
+  localAlias.hostname = primaryWebOrigin.hostname === "localhost" ? "127.0.0.1" : "localhost";
+  originSet.add(localAlias.origin);
+}
+
+export const trustedWebOrigins = [...originSet];

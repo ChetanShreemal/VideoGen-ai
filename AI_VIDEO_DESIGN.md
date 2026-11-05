@@ -8,7 +8,7 @@
 
 ## Implementation fidelity requirement
 
-**Confirmed by the product owner on 2026-11-05:** Existing implemented screens are accepted as they are. For every remaining screen, use its corresponding approved Google Stitch frame in project `15822565898573567681` as the visual source of truth. Match the frame's layout, hierarchy, spacing, typography, colors, components, navigation, labels, and states closely; do not substitute a generic redesign or infer a new visual direction. Responsive layouts should adapt the same design for each target size while preserving its visual hierarchy and behavior. If a required state has no Stitch frame or the reference is ambiguous, identify the gap before inventing a replacement.
+**Confirmed by the product owner on 2026-11-05:** Existing implemented screens are accepted as they are. For every remaining screen, use its corresponding approved Google Stitch frame in project `15822565898573567681` as the visual source of truth. Match the frame's layout, hierarchy, spacing, typography, colors, components, navigation, labels, and states closely; do not substitute a generic redesign or infer a new visual direction. This includes the shared sidebar, navigation destinations and active states, profile/account menu, and settings; keep them consistent across every screen and match the Stitch references. Responsive layouts should adapt the same design for each target size while preserving its visual hierarchy and behavior. If a required state has no Stitch frame or the reference is ambiguous, identify the gap before inventing a replacement.
 
 ## Design goal
 

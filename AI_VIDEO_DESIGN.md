@@ -6,6 +6,10 @@
 >
 > **Decision handling:** Where the source documents label a decision open or unresolved, show the UI in a way that can accommodate alternatives. Treat example presets in this brief as provisional. Do not invent auth-provider routes, vendor behavior, prices, or implementation details.
 
+## Implementation fidelity requirement
+
+**Confirmed by the product owner on 2026-11-05:** Existing implemented screens are accepted as they are. For every remaining screen, use its corresponding approved Google Stitch frame in project `15822565898573567681` as the visual source of truth. Match the frame's layout, hierarchy, spacing, typography, colors, components, navigation, labels, and states closely; do not substitute a generic redesign or infer a new visual direction. Responsive layouts should adapt the same design for each target size while preserving its visual hierarchy and behavior. If a required state has no Stitch frame or the reference is ambiguous, identify the gap before inventing a replacement.
+
 ## Design goal
 
 Create a complete, connected, desktop-first responsive web product for beginner-friendly AI video creation. The default experience is a guided wizard; advanced controls are available when requested. Keep the interface modern, minimal, distinctive, professional, and quietly futuristic. Make each step understandable without prompt-engineering or editing expertise.

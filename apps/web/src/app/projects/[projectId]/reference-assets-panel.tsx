@@ -23,18 +23,25 @@ export function ReferenceAssetsPanel({ projectId, active }: Props) {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
-  const loadAssets = useCallback(async () => {
-    const response = await fetch(`${apiBaseURL}/projects/${projectId}/assets`, { credentials: "include", cache: "no-store" });
+  const loadAssets = useCallback(async (signal: AbortSignal): Promise<ProjectAsset[]> => {
+    const response = await fetch(`${apiBaseURL}/projects/${projectId}/assets`, { credentials: "include", cache: "no-store", signal });
     if (!response.ok) throw new Error("Reference assets could not be loaded.");
     const payload = projectAssetsResponseSchema.parse(await response.json());
-    setAssets(payload.data.items);
+    return payload.data.items;
   }, [projectId]);
 
   useEffect(() => {
     let current = true;
-    void loadAssets().catch(() => { if (current) setError("Reference assets could not be loaded."); })
+    const controller = new AbortController();
+    setAssets([]);
+    setPreviewUrls({});
+    setError("");
+    setMessage("");
+    setLoading(true);
+    void loadAssets(controller.signal).then((items) => { if (current) setAssets(items); })
+      .catch(() => { if (current && !controller.signal.aborted) setError("Reference assets could not be loaded."); })
       .finally(() => { if (current) setLoading(false); });
-    return () => { current = false; };
+    return () => { current = false; controller.abort(); };
   }, [loadAssets]);
 
   async function openPreview(asset: ProjectAsset) {

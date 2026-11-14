@@ -28,6 +28,17 @@ interface AssetDocument extends Document {
   media?: { type: "image"; width: number; height: number } | { type: "video"; width: number; height: number; durationSeconds: number; videoCodec: string };
   intentExpiresAt?: Date; verificationStartedAt?: Date; createdAt: Date; updatedAt: Date;
 }
+interface AssetQuotaLockDocument extends Document {
+  _id: string;
+  revision: number;
+}
+
+class AssetQuotaExceededError extends Error {
+  constructor() {
+    super("The project or account reference media limit has been reached.");
+    this.name = "AssetQuotaExceededError";
+  }
+}
 
 const cleanupIntervalMs = 60_000;
 const verificationLeaseMs = 5 * 60_000;
@@ -80,6 +91,7 @@ async function inspectMedia(asset: AssetDocument, bytes: Buffer) {
 
 export async function registerAssetRoutes(app: any, auth: AssetAuth, mongo: MongoDatabase, projects: ProjectRepository): Promise<void> {
   const assets: Collection<AssetDocument> = mongo.database().collection("projectAssets");
+  const quotaLocks: Collection<AssetQuotaLockDocument> = mongo.database().collection("assetQuotaLocks");
   let indexes: Promise<void> | undefined;
   const ensureIndexes = async (): Promise<void> => {
     if (!indexes) indexes = Promise.all([
@@ -195,13 +207,6 @@ export async function registerAssetRoutes(app: any, auth: AssetAuth, mongo: Mong
       const projectId = new ObjectId(params.data.projectId);
       const project = await projects.get(ownerUserId, projectId);
       if (!project || project.status !== "active") return sendError(reply, 404, "PROJECT_NOT_FOUND", "Active project was not found.");
-      const [projectCount, userUsage] = await Promise.all([
-        assets.countDocuments({ ownerUserId, projectId }),
-        assets.aggregate<{ total: number }>([{ $match: { ownerUserId } }, { $group: { _id: null, total: { $sum: "$sizeBytes" } } }]).toArray(),
-      ]);
-      if (projectCount >= assetUploadPolicy.maxAssetsPerProject || (userUsage[0]?.total ?? 0) + input.data.sizeBytes > assetUploadPolicy.maxBytesPerUser) {
-        return sendError(reply, 413, "ASSET_QUOTA_EXCEEDED", "The project or account reference media limit has been reached.");
-      }
       const now = new Date();
       const id = new ObjectId();
       const uploadKey = `incoming/${randomUUID()}`;
@@ -210,7 +215,35 @@ export async function registerAssetRoutes(app: any, auth: AssetAuth, mongo: Mong
       const uploadUrl = await createUploadUrl(uploadKey, input.data.contentType, input.data.sizeBytes);
       const asset: AssetDocument = { _id: id, ownerUserId, projectId, status: "pending", fileName: input.data.fileName,
         contentType: input.data.contentType, sizeBytes: input.data.sizeBytes, uploadKey, objectKey, intentExpiresAt, createdAt: now, updatedAt: now };
-      await assets.insertOne(asset);
+      try {
+        try {
+          await quotaLocks.updateOne({ _id: ownerUserId }, { $setOnInsert: { revision: 0 } }, { upsert: true });
+        } catch (error) {
+          if (!(typeof error === "object" && error !== null && "code" in error && error.code === 11000)) throw error;
+        }
+        const session = mongo.clientHandle().startSession();
+        try {
+          await session.withTransaction(async () => {
+            await quotaLocks.updateOne({ _id: ownerUserId }, { $inc: { revision: 1 } }, { session });
+            const projectCount = await assets.countDocuments({ ownerUserId, projectId }, { session });
+            const userUsage = await assets.aggregate<{ total: number }>(
+              [{ $match: { ownerUserId } }, { $group: { _id: null, total: { $sum: "$sizeBytes" } } }],
+              { session },
+            ).toArray();
+            if (projectCount >= assetUploadPolicy.maxAssetsPerProject || (userUsage[0]?.total ?? 0) + input.data.sizeBytes > assetUploadPolicy.maxBytesPerUser) {
+              throw new AssetQuotaExceededError();
+            }
+            await assets.insertOne(asset, { session });
+          });
+        } finally {
+          await session.endSession();
+        }
+      } catch (error) {
+        if (error instanceof AssetQuotaExceededError) {
+          return sendError(reply, 413, "ASSET_QUOTA_EXCEEDED", error.message);
+        }
+        throw error;
+      }
       return reply.status(201).send(assetUploadIntentResponseSchema.parse({ data: { assetId: id.toHexString(), uploadUrl, expiresAt: intentExpiresAt.toISOString() } }));
     } catch (error) {
       request.log.error("Asset upload intent creation failed.");

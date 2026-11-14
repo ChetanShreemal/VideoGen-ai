@@ -24,16 +24,17 @@ export async function createReadUrl(key: string): Promise<string> {
   return getSignedUrl(configuredClient(), new GetObjectCommand({ Bucket: r2Bucket, Key: key }), { expiresIn: 300 });
 }
 
-export async function copyObject(source: string, target: string, contentType: string): Promise<void> {
+export async function copyObject(source: string, target: string, contentType: string, sourceETag: string): Promise<void> {
   await configuredClient().send(new CopyObjectCommand({
     Bucket: r2Bucket, Key: target, CopySource: `${r2Bucket}/${encodeURIComponent(source).replaceAll("%2F", "/")}`,
-    ContentType: contentType, MetadataDirective: "REPLACE",
+    CopySourceIfMatch: sourceETag, ContentType: contentType, MetadataDirective: "REPLACE",
   }));
 }
 
-export async function readObject(key: string): Promise<Buffer> {
-  const result = await configuredClient().send(new GetObjectCommand({ Bucket: r2Bucket, Key: key }));
+export async function readObject(key: string, expectedETag: string): Promise<Buffer> {
+  const result = await configuredClient().send(new GetObjectCommand({ Bucket: r2Bucket, Key: key, IfMatch: expectedETag }));
   if (!result.Body) throw new Error("R2 object has no body.");
+  if (result.ETag !== expectedETag) throw new Error("R2 object changed during verification.");
   return Buffer.from(await result.Body.transformToByteArray());
 }
 

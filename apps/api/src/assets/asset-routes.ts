@@ -160,11 +160,12 @@ export async function registerAssetRoutes(app: any, auth: AssetAuth, mongo: Mong
       if (!asset || asset.status === "deleting") return sendError(reply, 404, "ASSET_NOT_FOUND", "Asset was not found.");
       if (asset.status === "ready") return reply.send(assetCompletionResponseSchema.parse({ data: { asset: toResponse(asset) } }));
       const head = await inspectObject(asset.uploadKey);
+      if (!head.ETag) return sendError(reply, 503, "ASSET_VERIFICATION_UNAVAILABLE", "The uploaded file could not be verified. Retry the upload.");
       if (head.ContentLength !== asset.sizeBytes || head.ContentType !== asset.contentType) return sendError(reply, 400, "ASSET_UPLOAD_MISMATCH", "Uploaded file size or content type does not match the upload request.");
-      const bytes = await readObject(asset.uploadKey);
+      const bytes = await readObject(asset.uploadKey, head.ETag);
       if (bytes.byteLength !== asset.sizeBytes) return sendError(reply, 400, "ASSET_UPLOAD_MISMATCH", "Uploaded file size does not match the upload request.");
       const media = await inspectMedia(asset, bytes);
-      await copyObject(asset.uploadKey, asset.objectKey, asset.contentType);
+      await copyObject(asset.uploadKey, asset.objectKey, asset.contentType, head.ETag);
       const now = new Date();
       await assets.updateOne({ _id: assetId, ownerUserId, projectId, status: "pending" }, { $set: { status: "ready", media, updatedAt: now } });
       const ready = await assets.findOne({ _id: assetId, ownerUserId, projectId, status: "ready" });
@@ -172,6 +173,12 @@ export async function registerAssetRoutes(app: any, auth: AssetAuth, mongo: Mong
       await deleteObject(asset.uploadKey);
       return reply.send(assetCompletionResponseSchema.parse({ data: { asset: toResponse(ready) } }));
     } catch (error) {
+      const statusCode = typeof error === "object" && error !== null && "$metadata" in error
+        ? (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode
+        : undefined;
+      if (statusCode === 412 || (error instanceof Error && error.message.includes("changed during verification"))) {
+        return sendError(reply, 409, "ASSET_UPLOAD_CHANGED", "The uploaded object changed during verification. Upload it again before completing.");
+      }
       if (error instanceof Error && (error.message.includes("does not match") || error.message.includes("dimensions") || error.message.includes("metadata"))) return sendError(reply, 400, "ASSET_VALIDATION_ERROR", error.message);
       request.log.error("Asset completion failed.");
       return sendError(reply, 503, "ASSETS_UNAVAILABLE", "Asset verification is temporarily unavailable. Retry completion.");

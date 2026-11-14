@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import {
   createProjectResponseSchema,
@@ -26,6 +26,7 @@ export function ProjectsWorkspace({
 }) {
   const [status, setStatus] = useState<ProjectStatus>("active");
   const [projects, setProjects] = useState<ProjectResponse[]>([]);
+  const projectRequestId = useRef(0);
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
@@ -39,20 +40,27 @@ export function ProjectsWorkspace({
   const [aspectRatio, setAspectRatio] = useState<string | null>(null);
 
   const loadProjects = useCallback(async (nextStatus: ProjectStatus, nextCursor?: string, append = false) => {
+    const requestId = ++projectRequestId.current;
     setLoading(true);
     setError("");
+    if (!append) {
+      setProjects([]);
+      setCursor(null);
+    }
     try {
       const query = new URLSearchParams({ status: nextStatus, limit: "20" });
       if (nextCursor) query.set("cursor", nextCursor);
       const response = await fetch(`${apiBaseURL}/projects?${query}`, { credentials: "include", cache: "no-store" });
       if (!response.ok) throw new Error("Project list request failed.");
       const result = listProjectsResponseSchema.parse(await response.json());
+      if (requestId !== projectRequestId.current) return;
       setProjects((current) => append ? [...current, ...result.data.items] : result.data.items);
       setCursor(result.data.nextCursor);
     } catch {
+      if (requestId !== projectRequestId.current) return;
       setError("Projects could not be loaded. Check your connection and try again.");
     } finally {
-      setLoading(false);
+      if (requestId === projectRequestId.current) setLoading(false);
     }
   }, []);
 
@@ -73,8 +81,18 @@ export function ProjectsWorkspace({
     return () => window.cancelAnimationFrame(frame);
   }, [showCreateForm, status]);
 
+  function switchStatus(nextStatus: ProjectStatus) {
+    if (nextStatus === status) return;
+    projectRequestId.current += 1;
+    setProjects([]);
+    setCursor(null);
+    setError("");
+    setLoading(true);
+    setStatus(nextStatus);
+  }
+
   function openCreateVideo() {
-    if (status !== "active") setStatus("active");
+    if (status !== "active") switchStatus("active");
     setShowCreateForm(true);
   }
 
@@ -146,8 +164,8 @@ export function ProjectsWorkspace({
         </div>
         <div className="dashboard-toolbar">
           <div className="project-tabs" role="tablist" aria-label="Project status">
-            <button role="tab" aria-selected={status === "active"} className={status === "active" ? "selected" : ""} onClick={() => setStatus("active")}>Active</button>
-            <button role="tab" aria-selected={status === "archived"} className={status === "archived" ? "selected" : ""} onClick={() => setStatus("archived")}>Archived</button>
+            <button role="tab" aria-selected={status === "active"} className={status === "active" ? "selected" : ""} onClick={() => switchStatus("active")}>Active</button>
+            <button role="tab" aria-selected={status === "archived"} className={status === "archived" ? "selected" : ""} onClick={() => switchStatus("archived")}>Archived</button>
           </div>
           <label className="dashboard-search"><span className="material-symbols-outlined" aria-hidden="true">search</span><input aria-label="Search projects" placeholder="Search your projects" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
         </div>

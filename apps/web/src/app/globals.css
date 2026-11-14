@@ -360,9 +360,10 @@ h1 { margin: 0; font-size: clamp(34px, 4vw, 46px); font-weight: 600; letter-spac
 .project-detail { display: flex; flex-direction: column; }
 .detail-heading { order: 0; }
 .detail-layout { order: 1; }
-.storyboard-panel { order: 2; }
-.audio-panel { order: 3; }
-.detail-actions { order: 4; }
+.reference-assets-panel { order: 2; }
+.storyboard-panel { order: 3; }
+.audio-panel { order: 4; }
+.detail-actions { order: 5; }
 .workspace-footer { min-height: 48px; padding: 0 clamp(22px, 3vw, 44px); }
 .detail-panel, .scene-card, .project-card, .project-create, .reset-card { border-radius: 4px; border-color: var(--border); }
 .detail-panel, .project-card { background: var(--surface); }
@@ -373,6 +374,33 @@ h1 { margin: 0; font-size: clamp(34px, 4vw, 46px); font-weight: 600; letter-spac
 .project-card-art { background: radial-gradient(circle at 70% 35%, rgba(242,140,40,.2), transparent 25%), linear-gradient(145deg, #1e2124, #0c0d0e 72%); }
 .project-status, .status-pill { border-radius: 4px; font-family: "JetBrains Mono", monospace; }
 .eyebrow, .scene-number { font-family: "JetBrains Mono", monospace; }
+
+.reference-assets-panel { display: grid; gap: 16px; }
+.reference-assets-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.reference-assets-heading h2 { margin: 0; font-size: 20px; letter-spacing: -.025em; }
+.reference-assets-heading .detail-copy { margin: 6px 0 0; }
+.reference-count { padding: 5px 8px; border: 1px solid var(--border); border-radius: 4px; color: var(--muted); font: 10px "JetBrains Mono", monospace; white-space: nowrap; }
+.reference-upload-box { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 14px; border: 1px dashed var(--border-active); border-radius: 4px; background: rgba(255,255,255,.015); }
+.reference-file-input { display: none; }
+.reference-upload-box > button { display: inline-flex; min-height: 36px; align-items: center; gap: 7px; padding: 0 12px; }
+.reference-upload-box > button .material-symbols-outlined { font-size: 17px; }
+.reference-limits { color: var(--muted); font-size: 10px; }
+.reference-rights { display: flex; flex-basis: 100%; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
+.reference-rights input { accent-color: var(--accent); }
+.reference-empty { margin: 0; padding: 14px 0 2px; color: var(--muted); font-size: 12px; }
+.reference-assets-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+.reference-asset-card { display: grid; min-width: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 4px; background: var(--surface-raised); }
+.reference-preview { display: grid; height: 150px; place-items: center; overflow: hidden; background: #101112; color: var(--quiet); }
+.reference-preview > .material-symbols-outlined { font-size: 32px; }
+.reference-preview img, .reference-preview video { width: 100%; height: 100%; object-fit: contain; }
+.reference-asset-copy { display: grid; min-width: 0; gap: 5px; padding: 10px 11px 5px; }
+.reference-asset-copy strong { overflow: hidden; font-size: 11px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
+.reference-asset-copy small { color: var(--muted); font-size: 9px; }
+.reference-asset-actions { display: flex; justify-content: space-between; gap: 8px; padding: 8px 10px 10px; }
+.reference-asset-actions .quiet-button { min-height: 30px; padding: 0 9px; font-size: 10px; }
+.reference-remove { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 10px; cursor: pointer; }
+.reference-remove:hover { color: #ff8f7a; }
+.reference-asset-actions button:disabled { cursor: wait; opacity: .55; }
 
 /* Stitch authentication screens use a single centered credential card. */
 .auth-page { min-height: 100vh; padding: 0; background: radial-gradient(ellipse at 50% 42%, rgba(242,140,40,.055), transparent 43%), var(--page); }
@@ -465,4 +493,6 @@ h1 { margin: 0; font-size: clamp(34px, 4vw, 46px); font-weight: 600; letter-spac
   .storyboard-footer > div { width: 100%; flex-wrap: wrap; }
   .storyboard-footer > div > button { flex: 1; }
   .scene-fields { grid-template-columns: 1fr; }
+  .reference-upload-box { align-items: flex-start; flex-direction: column; }
+  .reference-assets-grid { grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); }
 }

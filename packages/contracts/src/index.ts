@@ -100,6 +100,7 @@ export const projectAssetSchema = z.object({
   media: assetMediaMetadataSchema,
   createdAt: z.iso.datetime(),
 }).strict();
+export type ProjectAsset = z.infer<typeof projectAssetSchema>;
 export const projectAssetsResponseSchema = z.object({ data: z.object({ items: z.array(projectAssetSchema) }).strict() }).strict();
 export const assetUploadIntentResponseSchema = z.object({
   data: z.object({

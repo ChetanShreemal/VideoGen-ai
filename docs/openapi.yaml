@@ -235,6 +235,144 @@ paths:
           $ref: '#/components/responses/ProjectNotFound'
         '503':
           $ref: '#/components/responses/ProjectsUnavailable'
+  /projects/{projectId}/assets:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      operationId: listProjectAssets
+      tags: [Projects]
+      summary: List verified reference assets
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Verified assets owned by the authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectAssetsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/ProjectNotFound'
+  /projects/{projectId}/assets/upload-intents:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    post:
+      operationId: createProjectAssetUploadIntent
+      tags: [Projects]
+      summary: Create a short-lived private R2 upload URL
+      description: The project owner uploads directly to the private R2 bucket, then calls the completion endpoint for byte and media verification.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetUploadRequest'
+      responses:
+        '201':
+          description: Upload intent created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetUploadIntentResponse'
+        '400':
+          description: Invalid media metadata or rights confirmation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/ProjectNotFound'
+        '413':
+          description: Project or user storage quota exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '503':
+          $ref: '#/components/responses/ProjectsUnavailable'
+  /projects/{projectId}/assets/{assetId}/complete:
+    post:
+      operationId: completeProjectAssetUpload
+      tags: [Projects]
+      summary: Verify an uploaded object and mark the asset ready
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AssetId'
+      responses:
+        '200':
+          description: Verified asset metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetCompletionResponse'
+        '400':
+          description: Uploaded bytes or media metadata are invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/ProjectNotFound'
+        '503':
+          $ref: '#/components/responses/ProjectsUnavailable'
+  /projects/{projectId}/assets/{assetId}/preview:
+    get:
+      operationId: getProjectAssetPreviewUrl
+      tags: [Projects]
+      summary: Create a short-lived private preview URL
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AssetId'
+      responses:
+        '200':
+          description: Expiring object URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetPreviewResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          description: Verified asset was not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '503':
+          $ref: '#/components/responses/ProjectsUnavailable'
+  /projects/{projectId}/assets/{assetId}:
+    delete:
+      operationId: deleteProjectAsset
+      tags: [Projects]
+      summary: Delete a reference asset with retryable cleanup
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AssetId'
+      responses:
+        '204':
+          description: Asset removed or already absent
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '503':
+          description: Object cleanup remains pending and can be retried
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
   /projects/{projectId}/storyboards:
     parameters:
       - $ref: '#/components/parameters/ProjectId'
@@ -385,6 +523,14 @@ components:
       schema:
         type: string
         pattern: '^[a-fA-F0-9]{24}$'
+    AssetId:
+      name: assetId
+      in: path
+      required: true
+      description: 24-character MongoDB ObjectId.
+      schema:
+        type: string
+        pattern: '^[a-fA-F0-9]{24}$'
   securitySchemes:
     sessionCookie:
       type: apiKey
@@ -425,6 +571,95 @@ components:
               code: PROJECT_NOT_FOUND
               message: Project was not found.
   schemas:
+    AssetUploadRequest:
+      type: object
+      additionalProperties: false
+      required: [fileName, contentType, sizeBytes, rightsConfirmed]
+      properties:
+        fileName:
+          type: string
+          minLength: 1
+          maxLength: 255
+        contentType:
+          type: string
+          enum: [image/jpeg, image/png, image/webp, video/mp4, video/quicktime]
+        sizeBytes:
+          type: integer
+          minimum: 1
+          maximum: 104857600
+        rightsConfirmed:
+          type: boolean
+          const: true
+    AssetUploadIntentResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [assetId, uploadUrl, expiresAt]
+          properties:
+            assetId:
+              type: string
+            uploadUrl:
+              type: string
+              format: uri
+            expiresAt:
+              type: string
+              format: date-time
+    ProjectAssetsResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProjectAsset'
+    ProjectAsset:
+      type: object
+      required: [id, fileName, contentType, sizeBytes, media, createdAt]
+      properties:
+        id:
+          type: string
+        fileName:
+          type: string
+        contentType:
+          type: string
+        sizeBytes:
+          type: integer
+        media:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+    AssetCompletionResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [asset]
+          properties:
+            asset:
+              $ref: '#/components/schemas/ProjectAsset'
+    AssetPreviewResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [url, expiresAt]
+          properties:
+            url:
+              type: string
+              format: uri
+            expiresAt:
+              type: string
+              format: date-time
     ProjectSettings:
       type: object
       additionalProperties: false

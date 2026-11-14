@@ -13,12 +13,16 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1169.0",
+    "@aws-sdk/s3-request-presigner": "^3.1169.0",
     "@fastify/cors": "^11.4.0",
     "@videogen/contracts": "0.1.0",
     "@videogen/database": "0.1.0",
     "better-auth": "^1.7.15",
     "fastify": "^5.5.0",
+    "file-type": "^22.3.0",
     "resend": "^6.37.0",
+    "sharp": "^0.35.5",
     "zod": "^4.1.12"
   },
   "devDependencies": {

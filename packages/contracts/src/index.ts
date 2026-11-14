@@ -87,6 +87,30 @@ export const assetUploadRequestSchema = z.object({
 
 export type AssetUploadRequest = z.infer<typeof assetUploadRequestSchema>;
 
+export const assetIdParamsSchema = z.object({ assetId: z.string().regex(/^[a-f\d]{24}$/i) }).strict();
+export const assetMediaMetadataSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("image"), width: z.number().int().positive(), height: z.number().int().positive() }).strict(),
+  z.object({ type: z.literal("video"), width: z.number().int().positive(), height: z.number().int().positive(), durationSeconds: z.number().positive(), videoCodec: z.string().min(1).max(64) }).strict(),
+]);
+export const projectAssetSchema = z.object({
+  id: z.string().regex(/^[a-f\d]{24}$/i),
+  fileName: z.string().min(1).max(255),
+  contentType: z.enum(referenceMimeTypes),
+  sizeBytes: z.number().int().positive(),
+  media: assetMediaMetadataSchema,
+  createdAt: z.iso.datetime(),
+}).strict();
+export const projectAssetsResponseSchema = z.object({ data: z.object({ items: z.array(projectAssetSchema) }).strict() }).strict();
+export const assetUploadIntentResponseSchema = z.object({
+  data: z.object({
+    assetId: z.string().regex(/^[a-f\d]{24}$/i),
+    uploadUrl: z.url(),
+    expiresAt: z.iso.datetime(),
+  }).strict(),
+}).strict();
+export const assetCompletionResponseSchema = z.object({ data: z.object({ asset: projectAssetSchema }).strict() }).strict();
+export const assetPreviewResponseSchema = z.object({ data: z.object({ url: z.url(), expiresAt: z.iso.datetime() }).strict() }).strict();
+
 export const createProjectRequestSchema = z.object({
   title: z.string().trim().min(1).max(120),
   topic: z.string().trim().max(2_000).optional(),

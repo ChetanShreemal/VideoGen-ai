@@ -14,6 +14,7 @@ import { config, trustedWebOrigins } from "./config.js";
 import { registerProjectRoutes } from "./projects/project-routes.js";
 import { ProjectRepository } from "./projects/project-repository.js";
 import { StoryboardRepository } from "./projects/storyboard-repository.js";
+import { registerAssetRoutes } from "./assets/asset-routes.js";
 
 if (config.MONGODB_DNS_SERVERS?.length) {
   setServers(config.MONGODB_DNS_SERVERS);
@@ -39,10 +40,11 @@ const storyboardRepository = new StoryboardRepository(database);
 await app.register(fastifyCors, {
   origin: trustedWebOrigins,
   credentials: true,
-  methods: ["GET", "HEAD", "POST", "PATCH", "OPTIONS"],
+  methods: ["GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"],
 });
 
 await registerProjectRoutes(app, auth, projectRepository, storyboardRepository);
+await registerAssetRoutes(app, auth, database, projectRepository);
 
 app.route({
   method: ["GET", "POST"],

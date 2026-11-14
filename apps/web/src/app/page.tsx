@@ -165,18 +165,7 @@ export default function HomePage() {
   return (
     <main className="auth-page">
       <div className="auth-shell">
-        <header className="auth-header">
-          <a className="brand" href="#" aria-label="VideoGen home">
-            <span className="brand-mark" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M5 4.8h5.2l8.9 14.4h-5.2L5 4.8Z" fill="currentColor" />
-                <path d="M14.8 4.8H20l-8.9 14.4H5.9l8.9-14.4Z" fill="currentColor" opacity=".58" />
-              </svg>
-            </span>
-            <span>VideoGen</span>
-          </a>
-          <a className="help-link" href="mailto:support@videogen.example">Need help?</a>
-        </header>
+        {!session && <header className="auth-header"><a className="help-link" href="mailto:support@videogen.example">Need help?</a></header>}
 
         <section className={`auth-content${session && protectedUser ? " is-workspace" : ""}`} aria-labelledby="sign-in-title">
           <div className={session && protectedUser ? "workspace-container" : "auth-form-panel"}>
@@ -189,13 +178,14 @@ export default function HomePage() {
             ) : (
               <>
                 <div className="form-heading">
+                  <div className="auth-card-brand"><span className="material-symbols-outlined" aria-hidden="true">play_arrow</span><span>VideoGen</span></div>
                   <p className="eyebrow">YOUR CREATIVE STUDIO</p>
                   <h1 id="sign-in-title">
                     {mode === "sign-in" ? "Welcome back" : mode === "sign-up" ? "Create your account" : "Reset your password"}
                   </h1>
                   <p className="form-subtitle">
                     {mode === "sign-in"
-                      ? "Sign in to continue building your next story."
+                      ? "Sign in to keep building your videos."
                       : mode === "sign-up"
                         ? "Start building your next story with VideoGen."
                         : "Enter your account email and we’ll send a secure reset link if it matches an account."}
@@ -250,7 +240,6 @@ export default function HomePage() {
                     setFeedbackType("");
                   }} type="button">{mode === "sign-in" ? "Create an account" : "Sign in"}</button>
                 </p>
-                <p className="mock-note">{mode === "forgot-password" ? "Reset links expire after one hour." : "Email verification is not configured."}</p>
               </>
             )}
           </div>

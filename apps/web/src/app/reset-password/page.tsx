@@ -11,7 +11,7 @@ export default async function ResetPasswordPage({ searchParams }: ResetPasswordP
   return (
     <main className="reset-page">
       <a className="brand reset-brand" href="/" aria-label="VideoGen home">
-        <span className="brand-mark" aria-hidden="true">V</span>
+        <span className="brand-mark material-symbols-outlined" aria-hidden="true">play_arrow</span>
         <span>VideoGen</span>
       </a>
       <ResetPasswordForm token={token} />

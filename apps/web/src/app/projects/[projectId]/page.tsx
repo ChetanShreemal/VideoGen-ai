@@ -14,6 +14,7 @@ import {
   updateProjectRequestSchema,
 } from "@videogen/contracts";
 import { apiBaseURL, authClient } from "@/lib/auth-client";
+import { WorkspaceShell } from "../../workspace-shell";
 
 export default function ProjectDetailsPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -201,22 +202,34 @@ export default function ProjectDetailsPage() {
     finally { setWorking(false); }
   }
 
-  return <main className="workspace-page">
-    <header className="workspace-topbar"><a className="brand" href="/" aria-label="VideoGen home"><span className="brand-mark" aria-hidden="true">V</span><span>VideoGen</span></a><Link className="quiet-button back-link" href="/">← Projects</Link></header>
+  async function signOut() {
+    setWorking(true);
+    try {
+      const result = await authClient.signOut();
+      if (result.error) throw new Error("Sign out failed.");
+      window.location.replace("/");
+    } catch {
+      setError("We could not sign you out. Try again.");
+      setWorking(false);
+    }
+  }
+
+  return <WorkspaceShell name={session?.user.name || "Creator"} email={session?.user.email || ""} active="storyboard" projectId={projectId} onSignOut={() => void signOut()} signingOut={working}>
+  <main className="workspace-page">
     <section className="project-detail">
       {loading ? <div className="project-empty">Loading project…</div> : !project ? <div className="project-empty"><h1>Project unavailable</h1><p>{error}</p><Link className="quiet-button" href="/">Back to projects</Link></div> : <>
         <div className="detail-heading"><div><p className="eyebrow">PROJECT WORKSPACE</p><h1>{project.title}</h1><p className="form-subtitle">Created {new Date(project.createdAt).toLocaleDateString()} · Last updated {new Date(project.updatedAt).toLocaleDateString()}</p></div><span className={`status-pill ${project.status}`}>{project.status}</span></div>
         {error && <p className="form-feedback error" role="alert">{error}</p>}{message && <p className="form-feedback info" role="status">{message}</p>}
         <div className="detail-layout"><form className="detail-panel" onSubmit={save}><div><p className="eyebrow">PROJECT DETAILS</p><h2>Shape the starting point</h2><p className="detail-copy">These details stay with your project and can be changed as your story develops.</p></div><label className="field"><span>Project title</span><input required maxLength={120} disabled={project.status !== "active" || working} value={title} onChange={(event) => setTitle(event.target.value)} /></label><label className="field"><span>Video topic</span><textarea maxLength={2000} disabled={project.status !== "active" || working} value={topic} onChange={(event) => setTopic(event.target.value)} placeholder="Describe the idea behind this video" /></label>{project.status === "active" && <button className="primary-button" disabled={working} type="submit">{working ? "Saving…" : "Save changes"}<span aria-hidden="true">→</span></button>}</form>
           <aside className="detail-panel project-settings-panel"><p className="eyebrow">GENERATION SETTINGS</p><h2>Ready when you are</h2><p className="detail-copy">Set these up in a future step when you turn this idea into a video.</p><dl><div><dt>Duration</dt><dd>{project.settings.durationSeconds ? `${project.settings.durationSeconds}s` : "Not set"}</dd></div><div><dt>Language</dt><dd>{project.settings.language || "Not set"}</dd></div><div><dt>Visual style</dt><dd>{project.settings.visualStyle || "Not set"}</dd></div><div><dt>Aspect ratio</dt><dd>{project.settings.aspectRatio || "Not set"}</dd></div></dl></aside></div>
-        <section className="detail-panel audio-panel" aria-labelledby="audio-settings-title">
+        <section className="detail-panel audio-panel" id="audio-settings" aria-labelledby="audio-settings-title">
           <div><p className="eyebrow">VOICE & AUDIO · STEP 3</p><h2 id="audio-settings-title">Audio mix</h2><p className="detail-copy">Set the balance for narration and background music. These are saved preferences; no audio is generated yet.</p></div>
           <label className="field audio-range"><span>Narration volume <output>{narrationVolume}%</output></span><input aria-label="Narration volume" type="range" min="0" max="100" step="5" disabled={project.status !== "active" || working} value={narrationVolume} onChange={(event) => setNarrationVolume(Number(event.target.value))} /></label>
           <label className="audio-toggle"><input type="checkbox" checked={musicEnabled} disabled={project.status !== "active" || working} onChange={(event) => setMusicEnabled(event.target.checked)} /><span>Include background music</span><small>Off by default. Choose a licensed track in a later step.</small></label>
           <label className="field audio-range"><span>Music volume <output>{musicVolume}%</output></span><input aria-label="Music volume" type="range" min="0" max="100" step="5" disabled={!musicEnabled || project.status !== "active" || working} value={musicVolume} onChange={(event) => setMusicVolume(Number(event.target.value))} /></label>
           {project.status === "active" && <button className="primary-button" disabled={working} onClick={() => void saveAudioMix()} type="button">{working ? "Saving…" : "Save audio preferences"}<span aria-hidden="true">→</span></button>}
         </section>
-        <section className="storyboard-panel detail-panel">
+        <section className="storyboard-panel detail-panel" id="storyboard">
           <div className="storyboard-heading"><div><p className="eyebrow">CREATIVE PLAN · STEP 2</p><h2>Storyboard</h2><p className="detail-copy">Shape the story in ordered scenes. Nothing is generated from this draft.</p></div>{latestStoryboard && <span className={`status-pill ${latestStoryboard.status}`}>Version {latestStoryboard.version} · {latestStoryboard.status}</span>}</div>
           {storyboardLoading ? <p className="detail-copy">Loading storyboard…</p> : !storyboardContent ? <div className="storyboard-empty"><p>Turn your idea into a scene-by-scene plan.</p><button className="primary-button" disabled={working || !project.topic} onClick={() => { setStoryboardContent({ hook: project.topic ?? "", closing: "", scenes: [{ id: crypto.randomUUID(), title: "Opening scene", narration: project.topic ?? "", visualDescription: "Describe what the viewer sees", caption: "", durationSeconds: 8, transition: "Cut", characterReferences: [] }] }); }}>Start storyboard<span aria-hidden="true">→</span></button>{!project.topic && <small>Add a video topic above before starting.</small>}</div> : <>
             <label className="field"><span>Opening hook</span><textarea disabled={storyboardReadOnly || working} maxLength={2000} value={storyboardContent.hook} onChange={(event) => setStoryboardContent((current) => current ? { ...current, hook: event.target.value } : current)} /></label>
@@ -232,5 +245,6 @@ export default function ProjectDetailsPage() {
         <div className="detail-actions">{project.status === "active" ? <button className="quiet-button" disabled={working} onClick={() => void changeStatus("archive")}>Archive project</button> : <button className="quiet-button" disabled={working} onClick={() => void changeStatus("restore")}>Restore project</button>}<span>Revision {project.revision}</span></div>
       </>}
     </section><footer className="workspace-footer"><span>© 2026 VideoGen</span><span>Ideas into stories.</span></footer>
-  </main>;
+  </main>
+  </WorkspaceShell>;
 }

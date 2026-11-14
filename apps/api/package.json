@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "predev": "npm run build --workspace @videogen/contracts && npm run build --workspace @videogen/database",
-    "dev": "node --env-file=../../.env --import tsx --watch src/server.ts",
+    "dev": "node --env-file=../../.env --import tsx src/server.ts",
     "prebuild": "npm run build --workspace @videogen/contracts && npm run build --workspace @videogen/database",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",

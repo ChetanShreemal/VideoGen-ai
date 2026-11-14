@@ -9,6 +9,7 @@ import {
   type ProjectResponse,
 } from "@videogen/contracts";
 import { apiBaseURL } from "@/lib/auth-client";
+import { WorkspaceShell } from "./workspace-shell";
 
 type ProjectStatus = "active" | "archived";
 
@@ -29,6 +30,8 @@ export function ProjectsWorkspace({
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const [showCreateForm, setShowCreateForm] = useState(false);
   const [title, setTitle] = useState("");
   const [topic, setTopic] = useState("");
   const [genre, setGenre] = useState<"cartoon" | "educational" | "">("");
@@ -54,6 +57,11 @@ export function ProjectsWorkspace({
   }, []);
 
   useEffect(() => { void loadProjects(status); }, [loadProjects, status]);
+
+  function openCreateVideo() {
+    setShowCreateForm(true);
+    window.setTimeout(() => document.getElementById("new-project")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  }
 
   async function createProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -81,6 +89,7 @@ export function ProjectsWorkspace({
       setGenre("");
       setDurationSeconds(null);
       setAspectRatio(null);
+      setShowCreateForm(false);
       if (status !== "active") setStatus("active");
       else await loadProjects("active");
     } catch {
@@ -89,6 +98,11 @@ export function ProjectsWorkspace({
       setWorking(false);
     }
   }
+
+  const filteredProjects = projects.filter((project) => {
+    const query = search.trim().toLowerCase();
+    return !query || project.title.toLowerCase().includes(query) || (project.topic ?? "").toLowerCase().includes(query);
+  });
 
   async function changeProjectStatus(project: ProjectResponse, action: "archive" | "restore") {
     setWorking(true);
@@ -108,22 +122,24 @@ export function ProjectsWorkspace({
   }
 
   return (
-    <main className="workspace-page">
-      <header className="workspace-topbar">
-        <a className="brand" href="/" aria-label="VideoGen home"><span className="brand-mark" aria-hidden="true">V</span><span>VideoGen</span></a>
-        <div className="workspace-account"><span><strong>{name || email}</strong><small>{email}</small></span><button className="quiet-button" onClick={onSignOut} disabled={signingOut}>{signingOut ? "Signing out…" : "Sign out"}</button></div>
-      </header>
+    <WorkspaceShell name={name} email={email} active="projects" projectId={projects[0]?.id} onSignOut={onSignOut} onCreateVideo={openCreateVideo} signingOut={signingOut}>
+      <main className="workspace-page">
       <section className="workspace-main">
         <div className="workspace-heading">
-          <div><p className="eyebrow">YOUR CREATIVE STUDIO</p><h1>Projects</h1><p className="form-subtitle">Pick up a story or start something new.</p></div>
+          <div><p className="eyebrow">PRIVATE WORKSPACE</p><h1>Private Projects</h1><p className="form-subtitle">Manage your ideas and continue shaping each story.</p></div>
+          <button className="primary-button dashboard-create-button" type="button" onClick={openCreateVideo}><span className="material-symbols-outlined" aria-hidden="true">add</span>Create Video</button>
+        </div>
+        <div className="dashboard-toolbar">
           <div className="project-tabs" role="tablist" aria-label="Project status">
             <button role="tab" aria-selected={status === "active"} className={status === "active" ? "selected" : ""} onClick={() => setStatus("active")}>Active</button>
             <button role="tab" aria-selected={status === "archived"} className={status === "archived" ? "selected" : ""} onClick={() => setStatus("archived")}>Archived</button>
           </div>
+          <label className="dashboard-search"><span className="material-symbols-outlined" aria-hidden="true">search</span><input aria-label="Search projects" placeholder="Search your projects" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
         </div>
 
-        {status === "active" && <form className="project-create idea-setup" onSubmit={createProject}>
+        {status === "active" && showCreateForm && <form id="new-project" className="project-create idea-setup" onSubmit={createProject}>
           <div className="idea-setup-heading">
+            <button className="idea-setup-close" type="button" onClick={() => setShowCreateForm(false)}>Close</button>
             <p className="eyebrow">NEW VIDEO · STEP 1 OF 4</p>
             <div className="idea-step-track" aria-hidden="true"><span /></div>
             <h2>Start with your idea</h2>
@@ -155,14 +171,15 @@ export function ProjectsWorkspace({
         </form>}
 
         {error && <p className="form-feedback error" role="alert">{error}</p>}
-        <div className="project-list-heading"><h2>{status === "active" ? "Your projects" : "Archive"}</h2><span>{loading ? "Loading…" : `${projects.length}${cursor ? "+" : ""} ${projects.length === 1 ? "project" : "projects"}`}</span></div>
-        {loading && projects.length === 0 ? <div className="project-empty">Loading your projects…</div> : projects.length === 0 ? <div className="project-empty"><span className="empty-mark" aria-hidden="true">✳</span><h3>{status === "active" ? "Your next story starts here" : "Nothing archived"}</h3><p>{status === "active" ? "Create a project above and shape your idea into a video." : "Projects you archive will be kept here so you can restore them later."}</p></div> : <div className="project-grid">{projects.map((project) => <article className="project-card" key={project.id}>
+        <div className="project-list-heading"><h2>{status === "active" ? "All Projects" : "Archived Projects"}</h2><span>{loading ? "Loading…" : `${filteredProjects.length}${cursor ? "+" : ""} ${filteredProjects.length === 1 ? "project" : "projects"}`}</span></div>
+        {loading && projects.length === 0 ? <div className="project-empty">Loading your projects…</div> : projects.length === 0 ? <div className="project-empty"><span className="empty-mark" aria-hidden="true">movie_edit</span><h3>{status === "active" ? "No video projects yet" : "Nothing archived"}</h3><p>{status === "active" ? "Start a new project to develop your idea into a video." : "Projects you archive will be kept here so you can restore them later."}</p>{status === "active" && <button className="quiet-button" onClick={() => setShowCreateForm(true)} type="button">Create your first video</button>}</div> : filteredProjects.length === 0 ? <div className="project-empty"><span className="empty-mark" aria-hidden="true">search_off</span><h3>No matching projects</h3><p>Try another title or topic.</p><button className="quiet-button" onClick={() => setSearch("")} type="button">Clear search</button></div> : <div className="project-grid">{filteredProjects.map((project) => <article className="project-card" key={project.id}>
           <Link className="project-card-link" href={`/projects/${project.id}`}><div className="project-card-art"><span>VG</span><i aria-hidden="true">↗</i></div><div className="project-card-info"><span className="project-status">{project.status}</span><h3>{project.title}</h3><p>{project.topic || "No description yet"}</p><small>Updated {new Date(project.updatedAt).toLocaleDateString()}</small></div></Link>
           <div className="project-card-actions">{status === "active" ? <button className="quiet-button" disabled={working} onClick={() => void changeProjectStatus(project, "archive")}>Archive</button> : <button className="quiet-button" disabled={working} onClick={() => void changeProjectStatus(project, "restore")}>Restore</button>}</div>
         </article>)}</div>}
         {cursor && <button className="load-more" disabled={loading} onClick={() => void loadProjects(status, cursor, true)}>{loading ? "Loading…" : "Load more"}</button>}
       </section>
       <footer className="workspace-footer"><span>© 2026 VideoGen</span><span>Ideas into stories.</span></footer>
-    </main>
+      </main>
+    </WorkspaceShell>
   );
 }

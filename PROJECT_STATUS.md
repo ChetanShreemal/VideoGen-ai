@@ -1,6 +1,6 @@
 # AI VideoGen — Project Status and Work Tracker
 
-**Last updated:** 2026-11-05
+**Last updated:** 2026-11-14
 **Document owner:** Project team  
 **Purpose:** This is the ongoing source of truth for project work. Keep planned, completed, tested, remaining, blocked, and decided work here. Update it whenever project status changes and at the end of each work session.
 
@@ -24,7 +24,7 @@
 | Design | Google Stitch project exists and has been iterated; latest full-project QA is incomplete |
 | Requirements and technical specs | PRD, System Design, and API Design exist as review drafts in `C:\Users\Chetan\Downloads`; they are not yet in this repository |
 | Repository contents | Initial scaffold and design/status docs committed as `8090b62`; `main` is stable and ongoing work is on `dev`, tracking `origin/dev` |
-| Immediate priority | Verify the manual storyboard draft flow, then decide AI script provider, voice options, job orchestration and cost controls before enabling provider-backed brainstorming or generation |
+| Immediate priority | Restore Atlas database readiness and verify authentication end to end; then finish storyboard device-size QA and decide AI script provider, voice options, job orchestration and cost controls before enabling provider-backed brainstorming or generation |
 
 ## Product and architecture baseline
 
@@ -73,6 +73,7 @@ Update each row as work changes. Add links to PRs, commits, screenshots, test re
 | UX-10 | Verify responsive designs device-by-device | Needs verification | Responsive design was requested earlier; latest viewport/frame coverage could not be confirmed | Check phone, tablet and desktop layouts and record dimensions/results |
 | UX-11 | Verify dark/light themes, Roboto and VideoGen brand consistency | Needs verification | Design intent is dark + light support, Roboto, orange accent; latest global coverage is not fully verified | Inspect representative screens in both themes and record exceptions |
 | UX-12 | Verify authentication screen coverage | Partial | Sign-in and sign-up are implemented; recovery notice explains that email delivery is not configured. Provider-backed recovery/verification and visual browser QA remain unverified | Review auth screens in browser and decide email verification/recovery policy |
+| UX-13 | Align implemented web screens with the Google Stitch project | In progress | Read Stitch design system and inventoried 23 desktop screens through Stitch MCP. Updated the shared dark/orange tokens, Roboto/JetBrains Mono font stack, sign-in card, workspace navigation/profile shell, and projects dashboard. Project detail layout and all other designed screens still need comparison and implementation | Match storyboard/project detail screen next; implement remaining designs with their feature slices rather than adding nonfunctional routes |
 
 ### C. Architecture and API
 
@@ -298,3 +299,6 @@ This is the persistent test-case register. Update **Status**, **Actual result / 
 6. Keep draft/proposed decisions labeled as such until explicitly approved.
 
 | 2026-11-04 | Started the manual Script and Storyboard feature slice using the saved Google Stitch design brief | Added strict scene/storyboard contracts, workspace-scoped MongoDB version documents, create/list/update/approve API routes with optimistic revision checks, OpenAPI documentation, and a responsive ordered scene-card editor with manual versioning. No AI provider or paid generation is called. API/contracts/web typechecks passed; no runtime/API integration or browser QA was run | Run T-051 and T-052 against Atlas and in the browser; review duration warning/scene content behavior before enabling provider-backed script drafting |
+| 2026-11-13 | Restored local authentication readiness and fixed API startup on this machine | Atlas showed the current IP added. MongoDB SRV resolution failed with the configured public DNS servers; `.env` now uses this machine's DNS server (`192.168.29.1`). The API dev command previously failed with `spawn EPERM` because of Node `--watch`; removed watch mode from `apps/api/package.json`. Verified `npm run dev:api` starts and `/api/v1/ready` returns `{"status":"ready","service":"videogen-api","database":"connected"}`. Sign-in UI loaded; submitted credentials returned 401 `Invalid password`, so a successful user sign-in was not verified | Keep the API process running, retry sign-in with the correct credentials or use password recovery, then finish storyboard responsive/device QA before provider decisions |
+| 2026-11-14 | Rechecked recurring authentication availability report | API health returned HTTP 200, but `/api/v1/ready` returned HTTP 503. API logs show MongoDB Atlas TLS alert `ERR_SSL_TLSV1_ALERT_INTERNAL_ERROR`; the Atlas browser session is signed out, so the current IP access-list entry could not be inspected. Backend is not ready for authenticated requests; do not mark authentication verified | Owner signs in to Atlas; inspect the Network Access list and ensure this machine's current public IP is allowed, then retest `/api/v1/ready` and sign-in |
+| 2026-11-14 | Began Google Stitch visual alignment for the implemented app | Retrieved the canonical Stitch design system and screen inventory using MCP. Applied the Stitch charcoal/orange tokens and typography, added the common workspace navigation/profile shell to Projects and project detail, and reshaped the Projects dashboard with search and a Create Video entry point. Browser accessibility review confirmed the shell and project content render; pixel-level comparison and the rest of the screen inventory remain outstanding | Continue with storyboard/project detail fidelity, then align each screen as its feature is implemented; keep unbuilt design routes visibly unavailable until the feature exists |

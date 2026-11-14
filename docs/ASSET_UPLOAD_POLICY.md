@@ -34,7 +34,7 @@ Cloudflare documents that presigned URLs grant a specific S3 operation on a spec
 
 1. **Done locally:** Create a private R2 bucket and least-privilege API token with object read/write/delete for that bucket only; configure endpoint, bucket, access key, and secret in local secrets. The local bucket connection was verified without printing credentials.
 2. **API foundation implemented:** Owner-scoped signed upload intents, Mongo metadata, project/user quota checks, content signature and media metadata verification, short-lived preview URLs, and retryable delete routes.
-3. **Remaining before production:** Configure exact web-origin bucket CORS; exercise complete upload/read/delete flows; add cleanup for abandoned pending objects and account-deletion purge. Pending upload quota reservations currently have no automatic expiry/cleanup.
+3. **Remaining before production:** Configure exact web-origin bucket CORS; exercise complete upload/read/delete flows; implement account-deletion purge. Upload intents expire after 10 minutes; a periodic API cleanup pass reclaims expired pending uploads and their R2 objects, with failed cleanup attempts retried on later passes.
 4. Add the project UI and test file type/size/media metadata, ownership isolation, expiry, duplicate completion, deletion, and narrow layouts.
 
 Video verification invokes `ffprobe` from `PATH` by default; set `FFPROBE_PATH` to its executable path in deployed environments where it is installed elsewhere. The local development machine has `ffprobe` available.

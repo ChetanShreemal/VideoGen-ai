@@ -58,9 +58,24 @@ export function ProjectsWorkspace({
 
   useEffect(() => { void loadProjects(status); }, [loadProjects, status]);
 
+  useEffect(() => {
+    if (window.location.hash === "#new-project") {
+      setStatus("active");
+      setShowCreateForm(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (status !== "active" || !showCreateForm) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById("new-project")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [showCreateForm, status]);
+
   function openCreateVideo() {
+    if (status !== "active") setStatus("active");
     setShowCreateForm(true);
-    window.setTimeout(() => document.getElementById("new-project")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
   }
 
   async function createProject(event: FormEvent<HTMLFormElement>) {

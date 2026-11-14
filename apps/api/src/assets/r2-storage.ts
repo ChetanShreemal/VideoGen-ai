@@ -16,8 +16,8 @@ function configuredClient(): S3Client {
   return client;
 }
 
-export async function createUploadUrl(key: string, contentType: string): Promise<string> {
-  return getSignedUrl(configuredClient(), new PutObjectCommand({ Bucket: r2Bucket, Key: key, ContentType: contentType }), { expiresIn: 600 });
+export async function createUploadUrl(key: string, contentType: string, contentLength: number): Promise<string> {
+  return getSignedUrl(configuredClient(), new PutObjectCommand({ Bucket: r2Bucket, Key: key, ContentType: contentType, ContentLength: contentLength }), { expiresIn: 600 });
 }
 
 export async function createReadUrl(key: string): Promise<string> {

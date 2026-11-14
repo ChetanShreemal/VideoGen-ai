@@ -21,13 +21,17 @@ import { copyObject, createReadUrl, createUploadUrl, deleteObject, inspectObject
 
 const execFileAsync = promisify(execFile);
 type AssetAuth = ReturnType<typeof createAuth>;
-type AssetStatus = "pending" | "ready" | "deleting";
+type AssetStatus = "pending" | "verifying" | "ready" | "deleting";
 interface AssetDocument extends Document {
   _id: ObjectId; ownerUserId: string; projectId: ObjectId; status: AssetStatus;
-  fileName: string; contentType: string; sizeBytes: number; uploadKey: string; objectKey: string;
+  fileName: string; contentType: string; sizeBytes: number; uploadKey?: string; objectKey: string;
   media?: { type: "image"; width: number; height: number } | { type: "video"; width: number; height: number; durationSeconds: number; videoCodec: string };
-  createdAt: Date; updatedAt: Date;
+  intentExpiresAt?: Date; verificationStartedAt?: Date; createdAt: Date; updatedAt: Date;
 }
+
+const cleanupIntervalMs = 60_000;
+const verificationLeaseMs = 5 * 60_000;
+const cleanupBatchSize = 50;
 
 function sendError(reply: any, status: number, code: string, message: string) {
   return reply.status(status).send(apiErrorResponseSchema.parse({ error: { code, message } }));
@@ -81,9 +85,77 @@ export async function registerAssetRoutes(app: any, auth: AssetAuth, mongo: Mong
     if (!indexes) indexes = Promise.all([
       assets.createIndex({ ownerUserId: 1, projectId: 1, status: 1, createdAt: -1 }, { name: "project_assets_owner_status" }),
       assets.createIndex({ ownerUserId: 1, createdAt: 1 }, { name: "user_assets_quota" }),
+      assets.createIndex({ status: 1, intentExpiresAt: 1 }, { name: "pending_asset_expiry" }),
+      assets.createIndex({ status: 1, verificationStartedAt: 1 }, { name: "stale_asset_verification" }),
     ]).then(() => undefined).catch((error: unknown) => { indexes = undefined; throw error; });
     return indexes;
   };
+
+  const removeAssetObjects = async (asset: AssetDocument): Promise<void> => {
+    await Promise.all([
+      ...(asset.uploadKey ? [deleteObject(asset.uploadKey)] : []),
+      deleteObject(asset.objectKey),
+    ]);
+    await assets.deleteOne({ _id: asset._id, status: "deleting" });
+  };
+
+  const discardUnverifiedAsset = async (assetId: ObjectId, ownerUserId: string, projectId: ObjectId): Promise<void> => {
+    await assets.updateOne(
+      { _id: assetId, ownerUserId, projectId, status: { $in: ["pending", "verifying"] } },
+      { $set: { status: "deleting", updatedAt: new Date() }, $unset: { verificationStartedAt: "" } },
+    );
+    const deletingAsset = await assets.findOne({ _id: assetId, ownerUserId, projectId, status: "deleting" });
+    if (deletingAsset) await removeAssetObjects(deletingAsset);
+  };
+
+  const cleanupExpiredAssets = async (): Promise<void> => {
+    await ensureIndexes();
+    const now = new Date();
+    const staleVerificationBefore = new Date(now.getTime() - verificationLeaseMs);
+    const candidates = await assets.find({ $or: [
+      { status: "pending", $or: [
+        { intentExpiresAt: { $lte: now } },
+        { intentExpiresAt: { $exists: false }, createdAt: { $lte: new Date(now.getTime() - assetUploadPolicy.uploadUrlTtlSeconds * 1000) } },
+      ] },
+      { status: "verifying", verificationStartedAt: { $lte: staleVerificationBefore } },
+      { status: "deleting" },
+      { status: "ready", uploadKey: { $exists: true } },
+    ] }).sort({ updatedAt: 1 }).limit(cleanupBatchSize).toArray();
+
+    for (const candidate of candidates) {
+      try {
+        if (candidate.status === "ready") {
+          if (!candidate.uploadKey) continue;
+          await deleteObject(candidate.uploadKey);
+          await assets.updateOne({ _id: candidate._id, status: "ready", uploadKey: candidate.uploadKey }, { $unset: { uploadKey: "" } });
+          continue;
+        }
+        if (candidate.status !== "deleting") {
+          const staleBefore = candidate.status === "verifying" ? staleVerificationBefore : now;
+          const claim = await assets.updateOne(
+            { _id: candidate._id, status: candidate.status, ...(candidate.status === "verifying" ? { verificationStartedAt: { $lte: staleBefore } } : {}) },
+            { $set: { status: "deleting", updatedAt: now } },
+          );
+          if (claim.modifiedCount === 0) continue;
+        }
+        await removeAssetObjects({ ...candidate, status: "deleting" });
+      } catch (error) {
+        await assets.updateOne({ _id: candidate._id, status: "deleting" }, { $set: { updatedAt: new Date() } }).catch(() => undefined);
+        app.log.warn({ err: error, assetId: candidate._id.toHexString() }, "Expired asset cleanup will retry.");
+      }
+    }
+  };
+
+  let cleanupRunning = false;
+  const cleanupTimer = setInterval(() => {
+    if (cleanupRunning) return;
+    cleanupRunning = true;
+    void cleanupExpiredAssets()
+      .catch((error) => app.log.warn({ err: error }, "Expired asset cleanup pass failed."))
+      .finally(() => { cleanupRunning = false; });
+  }, cleanupIntervalMs);
+  cleanupTimer.unref?.();
+  app.addHook("onClose", async () => clearInterval(cleanupTimer));
 
   const requireUser = async (request: any, reply: any): Promise<string | undefined> => {
     if (!config.ASSET_UPLOADS_ENABLED) {
@@ -124,8 +196,8 @@ export async function registerAssetRoutes(app: any, auth: AssetAuth, mongo: Mong
       const project = await projects.get(ownerUserId, projectId);
       if (!project || project.status !== "active") return sendError(reply, 404, "PROJECT_NOT_FOUND", "Active project was not found.");
       const [projectCount, userUsage] = await Promise.all([
-        assets.countDocuments({ ownerUserId, projectId, status: { $in: ["pending", "ready"] } }),
-        assets.aggregate<{ total: number }>([{ $match: { ownerUserId, status: { $in: ["pending", "ready"] } } }, { $group: { _id: null, total: { $sum: "$sizeBytes" } } }]).toArray(),
+        assets.countDocuments({ ownerUserId, projectId }),
+        assets.aggregate<{ total: number }>([{ $match: { ownerUserId } }, { $group: { _id: null, total: { $sum: "$sizeBytes" } } }]).toArray(),
       ]);
       if (projectCount >= assetUploadPolicy.maxAssetsPerProject || (userUsage[0]?.total ?? 0) + input.data.sizeBytes > assetUploadPolicy.maxBytesPerUser) {
         return sendError(reply, 413, "ASSET_QUOTA_EXCEEDED", "The project or account reference media limit has been reached.");
@@ -134,11 +206,12 @@ export async function registerAssetRoutes(app: any, auth: AssetAuth, mongo: Mong
       const id = new ObjectId();
       const uploadKey = `incoming/${randomUUID()}`;
       const objectKey = `references/${id.toHexString()}`;
-      const uploadUrl = await createUploadUrl(uploadKey, input.data.contentType);
+      const intentExpiresAt = new Date(now.getTime() + assetUploadPolicy.uploadUrlTtlSeconds * 1000);
+      const uploadUrl = await createUploadUrl(uploadKey, input.data.contentType, input.data.sizeBytes);
       const asset: AssetDocument = { _id: id, ownerUserId, projectId, status: "pending", fileName: input.data.fileName,
-        contentType: input.data.contentType, sizeBytes: input.data.sizeBytes, uploadKey, objectKey, createdAt: now, updatedAt: now };
+        contentType: input.data.contentType, sizeBytes: input.data.sizeBytes, uploadKey, objectKey, intentExpiresAt, createdAt: now, updatedAt: now };
       await assets.insertOne(asset);
-      return reply.status(201).send(assetUploadIntentResponseSchema.parse({ data: { assetId: id.toHexString(), uploadUrl, expiresAt: new Date(now.getTime() + assetUploadPolicy.uploadUrlTtlSeconds * 1000).toISOString() } }));
+      return reply.status(201).send(assetUploadIntentResponseSchema.parse({ data: { assetId: id.toHexString(), uploadUrl, expiresAt: intentExpiresAt.toISOString() } }));
     } catch (error) {
       request.log.error("Asset upload intent creation failed.");
       return sendError(reply, error instanceof Error && error.message.includes("R2") ? 503 : 503, "ASSETS_UNAVAILABLE", "Asset uploads are temporarily unavailable.");
@@ -159,27 +232,49 @@ export async function registerAssetRoutes(app: any, auth: AssetAuth, mongo: Mong
       const asset = await assets.findOne({ _id: assetId, ownerUserId, projectId });
       if (!asset || asset.status === "deleting") return sendError(reply, 404, "ASSET_NOT_FOUND", "Asset was not found.");
       if (asset.status === "ready") return reply.send(assetCompletionResponseSchema.parse({ data: { asset: toResponse(asset) } }));
-      const head = await inspectObject(asset.uploadKey);
-      if (!head.ETag) return sendError(reply, 503, "ASSET_VERIFICATION_UNAVAILABLE", "The uploaded file could not be verified. Retry the upload.");
-      if (head.ContentLength !== asset.sizeBytes || head.ContentType !== asset.contentType) return sendError(reply, 400, "ASSET_UPLOAD_MISMATCH", "Uploaded file size or content type does not match the upload request.");
-      const bytes = await readObject(asset.uploadKey, head.ETag);
-      if (bytes.byteLength !== asset.sizeBytes) return sendError(reply, 400, "ASSET_UPLOAD_MISMATCH", "Uploaded file size does not match the upload request.");
+      const claimed = await assets.updateOne(
+        { _id: assetId, ownerUserId, projectId, status: "pending" },
+        { $set: { status: "verifying", verificationStartedAt: new Date(), updatedAt: new Date() } },
+      );
+      if (claimed.modifiedCount === 0) return sendError(reply, 409, "ASSET_STATE_CONFLICT", "Asset completion is already in progress or the asset state changed. Retry shortly.");
+      const verifyingAsset = { ...asset, status: "verifying" as const };
+      if (!verifyingAsset.uploadKey) {
+        await discardUnverifiedAsset(assetId, ownerUserId, projectId);
+        return sendError(reply, 404, "ASSET_NOT_FOUND", "Upload object was not found.");
+      }
+      const head = await inspectObject(verifyingAsset.uploadKey);
+      if (!head.ETag) throw new Error("Uploaded object has no ETag.");
+      if (head.ContentLength !== asset.sizeBytes || head.ContentType !== asset.contentType) {
+        await discardUnverifiedAsset(assetId, ownerUserId, projectId);
+        return sendError(reply, 400, "ASSET_UPLOAD_MISMATCH", "Uploaded file size or content type does not match the upload request.");
+      }
+      const bytes = await readObject(verifyingAsset.uploadKey, head.ETag);
+      if (bytes.byteLength !== asset.sizeBytes) {
+        await discardUnverifiedAsset(assetId, ownerUserId, projectId);
+        return sendError(reply, 400, "ASSET_UPLOAD_MISMATCH", "Uploaded file size does not match the upload request.");
+      }
       const media = await inspectMedia(asset, bytes);
-      await copyObject(asset.uploadKey, asset.objectKey, asset.contentType, head.ETag);
+      await copyObject(verifyingAsset.uploadKey, asset.objectKey, asset.contentType, head.ETag);
       const now = new Date();
-      await assets.updateOne({ _id: assetId, ownerUserId, projectId, status: "pending" }, { $set: { status: "ready", media, updatedAt: now } });
+      await assets.updateOne({ _id: assetId, ownerUserId, projectId, status: "verifying" }, { $set: { status: "ready", sizeBytes: head.ContentLength, media, updatedAt: now }, $unset: { verificationStartedAt: "" } });
       const ready = await assets.findOne({ _id: assetId, ownerUserId, projectId, status: "ready" });
       if (!ready) return sendError(reply, 409, "ASSET_STATE_CONFLICT", "Asset state changed; retry completion.");
-      await deleteObject(asset.uploadKey);
+      await deleteObject(verifyingAsset.uploadKey);
+      await assets.updateOne({ _id: assetId, status: "ready", uploadKey: verifyingAsset.uploadKey }, { $unset: { uploadKey: "" } });
       return reply.send(assetCompletionResponseSchema.parse({ data: { asset: toResponse(ready) } }));
     } catch (error) {
       const statusCode = typeof error === "object" && error !== null && "$metadata" in error
         ? (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode
         : undefined;
       if (statusCode === 412 || (error instanceof Error && error.message.includes("changed during verification"))) {
+        await discardUnverifiedAsset(assetId, ownerUserId, projectId).catch((cleanupError) => request.log.warn({ err: cleanupError }, "Changed upload cleanup will retry."));
         return sendError(reply, 409, "ASSET_UPLOAD_CHANGED", "The uploaded object changed during verification. Upload it again before completing.");
       }
-      if (error instanceof Error && (error.message.includes("does not match") || error.message.includes("dimensions") || error.message.includes("metadata"))) return sendError(reply, 400, "ASSET_VALIDATION_ERROR", error.message);
+      if (error instanceof Error && (error.message.includes("does not match") || error.message.includes("dimensions") || error.message.includes("metadata"))) {
+        await discardUnverifiedAsset(assetId, ownerUserId, projectId).catch((cleanupError) => request.log.warn({ err: cleanupError }, "Invalid upload cleanup will retry."));
+        return sendError(reply, 400, "ASSET_VALIDATION_ERROR", error.message);
+      }
+      await assets.updateOne({ _id: assetId, ownerUserId, projectId, status: "verifying" }, { $set: { status: "pending", updatedAt: new Date() }, $unset: { verificationStartedAt: "" } }).catch(() => undefined);
       request.log.error("Asset completion failed.");
       return sendError(reply, 503, "ASSETS_UNAVAILABLE", "Asset verification is temporarily unavailable. Retry completion.");
     }
@@ -210,9 +305,9 @@ export async function registerAssetRoutes(app: any, auth: AssetAuth, mongo: Mong
       await ensureIndexes();
       const asset = await assets.findOne({ _id: assetId, projectId, ownerUserId });
       if (!asset) return reply.status(204).send();
-      await assets.updateOne({ _id: assetId, ownerUserId, projectId }, { $set: { status: "deleting", updatedAt: new Date() } });
-      await Promise.all([deleteObject(asset.uploadKey), deleteObject(asset.objectKey)]);
-      await assets.deleteOne({ _id: assetId, ownerUserId, projectId, status: "deleting" });
+      await assets.updateOne({ _id: assetId, ownerUserId, projectId }, { $set: { status: "deleting", updatedAt: new Date() }, $unset: { verificationStartedAt: "" } });
+      const deletingAsset = { ...asset, status: "deleting" as const };
+      await removeAssetObjects(deletingAsset);
       return reply.status(204).send();
     } catch { request.log.error("Asset deletion failed; retry is safe."); return sendError(reply, 503, "ASSET_CLEANUP_PENDING", "Asset removal is still in progress. Retry deletion."); }
   });

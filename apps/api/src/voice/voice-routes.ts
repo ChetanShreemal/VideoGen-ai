@@ -74,6 +74,18 @@ export async function registerVoiceRoutes(
       },
     };
     try {
+      // MongoDB does not allow $expr in an upsert predicate. Ensure the owner
+      // document exists first, then reserve with a conditional non-upsert update.
+      try {
+        await limits.updateOne(
+          { _id: ownerUserId },
+          { $setOnInsert: { activeRequests: [], updatedAt: now } },
+          { upsert: true },
+        );
+      } catch (error) {
+        // Another concurrent request may have inserted this owner's document.
+        if (!(typeof error === "object" && error !== null && "code" in error && error.code === 11000)) throw error;
+      }
       const updated = await limits.findOneAndUpdate(
         {
           _id: ownerUserId,
@@ -83,12 +95,10 @@ export async function registerVoiceRoutes(
           activeRequests: { $concatArrays: [activeRequests, [{ requestId, expiresAt: new Date(now.getTime() + reservationLeaseMs) }]] },
           updatedAt: now,
         } }],
-        { upsert: true, returnDocument: "after" },
+        { returnDocument: "after" },
       );
       return updated?.activeRequests.some((request) => request.requestId === requestId) ? requestId : undefined;
     } catch (error) {
-      // If another request created the per-user lock first, Mongo's unique _id rejects this upsert.
-      if (typeof error === "object" && error !== null && "code" in error && error.code === 11000) return undefined;
       throw error;
     }
   };

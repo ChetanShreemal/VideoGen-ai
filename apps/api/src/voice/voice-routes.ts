@@ -16,12 +16,19 @@ const requestSchema = z.object({ voiceName: z.enum(voiceNames) }).strict();
 const requestTimeoutMs = 90_000;
 const reservationLeaseMs = 120_000;
 const maxNarrationCharacters = 8_000;
+const voiceRateWindowMs = 60 * 60_000;
+const maxVoiceRequestsPerWindow = 10;
 
 interface VoiceLimitDocument extends Document {
   _id: string;
   activeRequests: Array<{ requestId: string; expiresAt: Date }>;
+  recentRequests: Date[];
   updatedAt: Date;
 }
+
+type VoiceReservationResult =
+  | { requestId: string; limitedBy?: undefined; retryAfterSeconds?: undefined }
+  | { requestId?: undefined; limitedBy: "concurrency" | "rate"; retryAfterSeconds: number };
 
 function sendError(reply: FastifyReply, statusCode: number, code: string, message: string) {
   return reply.status(statusCode).send(apiErrorResponseSchema.parse({ error: { code, message } }));
@@ -63,14 +70,22 @@ export async function registerVoiceRoutes(
 ): Promise<void> {
   const limits: Collection<VoiceLimitDocument> = mongo.database().collection("voice_generation_limits");
 
-  const reserveRequest = async (ownerUserId: string): Promise<string | undefined> => {
+  const reserveRequest = async (ownerUserId: string): Promise<VoiceReservationResult> => {
     const now = new Date();
     const requestId = randomUUID();
+    const windowStart = new Date(now.getTime() - voiceRateWindowMs);
     const activeRequests = {
       $filter: {
         input: { $ifNull: ["$activeRequests", []] },
         as: "request",
         cond: { $gt: ["$$request.expiresAt", now] },
+      },
+    };
+    const recentRequests = {
+      $filter: {
+        input: { $ifNull: ["$recentRequests", []] },
+        as: "requestTime",
+        cond: { $gt: ["$$requestTime", windowStart] },
       },
     };
     try {
@@ -79,7 +94,7 @@ export async function registerVoiceRoutes(
       try {
         await limits.updateOne(
           { _id: ownerUserId },
-          { $setOnInsert: { activeRequests: [], updatedAt: now } },
+          { $setOnInsert: { activeRequests: [], recentRequests: [], updatedAt: now } },
           { upsert: true },
         );
       } catch (error) {
@@ -89,15 +104,27 @@ export async function registerVoiceRoutes(
       const updated = await limits.findOneAndUpdate(
         {
           _id: ownerUserId,
-          $expr: { $lt: [{ $size: activeRequests }, 1] },
+          $expr: { $and: [
+            { $lt: [{ $size: activeRequests }, 1] },
+            { $lt: [{ $size: recentRequests }, maxVoiceRequestsPerWindow] },
+          ] },
         },
         [{ $set: {
           activeRequests: { $concatArrays: [activeRequests, [{ requestId, expiresAt: new Date(now.getTime() + reservationLeaseMs) }]] },
+          recentRequests: { $concatArrays: [recentRequests, [now]] },
           updatedAt: now,
         } }],
         { returnDocument: "after" },
       );
-      return updated?.activeRequests.some((request) => request.requestId === requestId) ? requestId : undefined;
+      if (updated?.activeRequests.some((request) => request.requestId === requestId)) return { requestId };
+
+      const current = await limits.findOne({ _id: ownerUserId }, { projection: { recentRequests: 1 } });
+      const currentRecentRequests = (current?.recentRequests ?? []).filter((requestTime) => requestTime > windowStart);
+      if (currentRecentRequests.length >= maxVoiceRequestsPerWindow) {
+        const oldestRequest = currentRecentRequests.reduce((oldest, requestTime) => requestTime < oldest ? requestTime : oldest);
+        return { limitedBy: "rate", retryAfterSeconds: Math.max(1, Math.ceil((oldestRequest.getTime() + voiceRateWindowMs - now.getTime()) / 1000)) };
+      }
+      return { limitedBy: "concurrency", retryAfterSeconds: 60 };
     } catch (error) {
       throw error;
     }
@@ -138,15 +165,18 @@ export async function registerVoiceRoutes(
       if (!narration) return sendError(reply, 400, "NARRATION_EMPTY", "Add narration to the storyboard before generating a voice preview.");
       if (narration.length > maxNarrationCharacters) return sendError(reply, 413, "NARRATION_TOO_LONG", "This storyboard is too long for one voice preview. Shorten the narration and try again.");
 
-      let reservationId: string | undefined;
+      let reservation: VoiceReservationResult;
       try {
-        reservationId = await reserveRequest(ownerUserId);
+        reservation = await reserveRequest(ownerUserId);
       } catch {
         request.log.error("Voice generation limit could not be reserved.");
         return sendError(reply, 503, "VOICE_GENERATION_UNAVAILABLE", "Voice generation is temporarily unavailable.");
       }
-      if (!reservationId) {
-        reply.header("retry-after", "60");
+      if (!reservation.requestId) {
+        reply.header("retry-after", String(reservation.retryAfterSeconds));
+        if (reservation.limitedBy === "rate") {
+          return sendError(reply, 429, "VOICE_RATE_LIMITED", "You have reached the voice preview limit of 10 requests per hour. Please try again later.");
+        }
         return sendError(reply, 429, "VOICE_CONCURRENCY_LIMIT", "A voice preview is already being generated for this account. Wait for it to finish before starting another.");
       }
 
@@ -187,7 +217,7 @@ export async function registerVoiceRoutes(
           .header("x-videogen-storyboard-version", String(storyboard.version))
           .send(wav);
       } finally {
-        await releaseRequest(ownerUserId, reservationId, request);
+        await releaseRequest(ownerUserId, reservation.requestId, request);
       }
     } catch (error) {
       if (error instanceof Error && error.name === "TimeoutError") return sendError(reply, 504, "VOICE_GENERATION_TIMEOUT", "Voice generation took too long. Try again.");

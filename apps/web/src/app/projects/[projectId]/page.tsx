@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import {
   projectResponseEnvelopeSchema,
@@ -41,8 +41,28 @@ export default function ProjectDetailsPage() {
   const [storyboardLoading, setStoryboardLoading] = useState(false);
   const [generationCreating, setGenerationCreating] = useState(false);
   const [generationError, setGenerationError] = useState("");
+  const voiceRequestSequence = useRef(0);
+  const voicePreviewController = useRef<AbortController | null>(null);
+  const voiceStoryboardKey = storyboards[0] ? `${storyboards[0].id}:${JSON.stringify(storyboards[0].content)}` : "";
+  const voiceContextRef = useRef({ projectId, storyboardKey: voiceStoryboardKey });
+  voiceContextRef.current = { projectId, storyboardKey: voiceStoryboardKey };
 
   useEffect(() => () => { if (voicePreviewUrl) URL.revokeObjectURL(voicePreviewUrl); }, [voicePreviewUrl]);
+
+  useEffect(() => {
+    voiceRequestSequence.current += 1;
+    voicePreviewController.current?.abort();
+    voicePreviewController.current = null;
+    setVoiceGenerating(false);
+    setVoicePreviewUrl("");
+    setVoiceError("");
+    setMessage("");
+  }, [projectId, voiceStoryboardKey]);
+
+  useEffect(() => () => {
+    voiceRequestSequence.current += 1;
+    voicePreviewController.current?.abort();
+  }, []);
 
   useEffect(() => {
     if (sessionPending) return;
@@ -172,6 +192,15 @@ export default function ProjectDetailsPage() {
 
   async function generateVoicePreview() {
     if (!project || !latestStoryboard) return;
+    voicePreviewController.current?.abort();
+    const controller = new AbortController();
+    voicePreviewController.current = controller;
+    const requestSequence = ++voiceRequestSequence.current;
+    const requestProjectId = projectId;
+    const requestStoryboardKey = voiceContextRef.current.storyboardKey;
+    const requestIsCurrent = () => voiceRequestSequence.current === requestSequence
+      && voiceContextRef.current.projectId === requestProjectId
+      && voiceContextRef.current.storyboardKey === requestStoryboardKey;
     setVoiceGenerating(true);
     setVoiceError("");
     try {
@@ -180,6 +209,7 @@ export default function ProjectDetailsPage() {
         credentials: "include",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ voiceName }),
+        signal: controller.signal,
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null;
@@ -187,12 +217,17 @@ export default function ProjectDetailsPage() {
       }
       const audio = await response.blob();
       if (audio.type !== "audio/wav" || audio.size < 44) throw new Error("The voice provider returned an audio file the browser could not play.");
+      if (!requestIsCurrent()) return;
       setVoicePreviewUrl(URL.createObjectURL(audio));
       setMessage(`Voice preview ready for storyboard version ${latestStoryboard.version}.`);
     } catch (cause) {
+      if (!requestIsCurrent() || controller.signal.aborted) return;
       setVoiceError(cause instanceof Error ? cause.message : "Narration could not be generated. Try again.");
     } finally {
-      setVoiceGenerating(false);
+      if (requestIsCurrent()) {
+        voicePreviewController.current = null;
+        setVoiceGenerating(false);
+      }
     }
   }
 

@@ -477,7 +477,8 @@ paths:
       description: >-
         Sends the saved storyboard narration to Gemini 3.8 Flash-Lite TTS and returns a WAV preview.
         Requires the server-side GEMINI_API_KEY. Google may use free-tier inputs and outputs to improve
-        its products. No audio file is persisted by this endpoint.
+        its products. No audio file is persisted by this endpoint. Per user, only one request may be
+        active at a time and at most 10 accepted requests are allowed in any rolling 60-minute window.
       security:
         - sessionCookie: []
       parameters:
@@ -529,7 +530,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
         '429':
-          description: A voice preview is already running for this user or Gemini's quota was exceeded
+          description: A voice preview is already running, the user reached the rolling hourly limit, or Gemini's quota was exceeded. Retry-After is returned for application-enforced limits.
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying an application-enforced concurrency or usage limit
+              schema:
+                type: integer
+                minimum: 1
           content:
             application/json:
               schema:

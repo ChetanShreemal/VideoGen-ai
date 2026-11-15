@@ -17,6 +17,7 @@ import {
 import { apiBaseURL, authClient } from "@/lib/auth-client";
 import { WorkspaceShell } from "../../workspace-shell";
 import { ReferenceAssetsPanel } from "./reference-assets-panel";
+import { NarrationAssetsPanel } from "./narration-assets-panel";
 
 export default function ProjectDetailsPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -29,7 +30,9 @@ export default function ProjectDetailsPage() {
   const [musicVolume, setMusicVolume] = useState(20);
   const [musicEnabled, setMusicEnabled] = useState(false);
   const [voiceName, setVoiceName] = useState("Kore");
+  const [voicePreviewName, setVoicePreviewName] = useState("");
   const [voicePreviewUrl, setVoicePreviewUrl] = useState("");
+  const [voicePreviewAudio, setVoicePreviewAudio] = useState<Blob | null>(null);
   const [voiceGenerating, setVoiceGenerating] = useState(false);
   const [voiceError, setVoiceError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -55,6 +58,8 @@ export default function ProjectDetailsPage() {
     voicePreviewController.current = null;
     setVoiceGenerating(false);
     setVoicePreviewUrl("");
+    setVoicePreviewAudio(null);
+    setVoicePreviewName("");
     setVoiceError("");
     setMessage("");
   }, [projectId, voiceStoryboardKey]);
@@ -75,6 +80,8 @@ export default function ProjectDetailsPage() {
     setStoryboards([]);
     setStoryboardContent(null);
     setVoicePreviewUrl("");
+    setVoicePreviewAudio(null);
+    setVoicePreviewName("");
     setVoiceError("");
     void fetch(`${apiBaseURL}/projects/${projectId}`, { credentials: "include", cache: "no-store" })
       .then(async (response) => {
@@ -213,12 +220,20 @@ export default function ProjectDetailsPage() {
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null;
-        throw new Error(payload?.error?.message || "Narration could not be generated. Try again.");
+        const retrySeconds = Number(response.headers.get("retry-after"));
+        const waitMessage = response.status === 429 && Number.isFinite(retrySeconds) && retrySeconds > 0
+          ? retrySeconds < 60
+            ? ` Try again in about ${retrySeconds} second${retrySeconds === 1 ? "" : "s"}.`
+            : ` Try again in about ${Math.ceil(retrySeconds / 60)} minute${Math.ceil(retrySeconds / 60) === 1 ? "" : "s"}.`
+          : "";
+        throw new Error(`${payload?.error?.message || "Narration could not be generated. Try again."}${waitMessage}`);
       }
       const audio = await response.blob();
       if (audio.type !== "audio/wav" || audio.size < 44) throw new Error("The voice provider returned an audio file the browser could not play.");
       if (!requestIsCurrent()) return;
       setVoicePreviewUrl(URL.createObjectURL(audio));
+      setVoicePreviewAudio(audio);
+      setVoicePreviewName(voiceName);
       setMessage(`Voice preview ready for storyboard version ${latestStoryboard.version}.`);
     } catch (cause) {
       if (!requestIsCurrent() || controller.signal.aborted) return;
@@ -330,6 +345,7 @@ export default function ProjectDetailsPage() {
           <div className="voice-preview-controls"><button className="primary-button" disabled={project.status !== "active" || voiceGenerating || !latestStoryboard || !hasSavedNarration} onClick={() => void generateVoicePreview()} type="button">{voiceGenerating ? "Generating voice…" : voicePreviewUrl ? "Regenerate voice preview" : "Generate voice preview"}<span aria-hidden="true">→</span></button>{!latestStoryboard && <small>Save a storyboard first to generate narration.</small>}{latestStoryboard && !hasSavedNarration && <small>Save your storyboard changes before generating narration.</small>}</div>
           {voiceError && <p className="form-feedback error voice-feedback" role="alert">{voiceError}</p>}
           {voicePreviewUrl && <div className="voice-preview"><span className="eyebrow">PREVIEW · VERSION {latestStoryboard?.version}</span><audio controls preload="metadata" src={voicePreviewUrl}>Your browser does not support audio playback.</audio></div>}
+          <NarrationAssetsPanel key={projectId} projectId={projectId} active={project.status === "active"} storyboardId={latestStoryboard?.id} audio={voicePreviewAudio} voiceName={voicePreviewName || voiceName} />
           <p className="voice-privacy-note">Free Gemini tier is subject to usage limits. Google may use free-tier prompts and generated responses to improve its products; don’t include sensitive narration.</p>
           <label className="field audio-range"><span>Narration volume <output>{narrationVolume}%</output></span><input aria-label="Narration volume" type="range" min="0" max="100" step="5" disabled={project.status !== "active" || working} value={narrationVolume} onChange={(event) => setNarrationVolume(Number(event.target.value))} /></label>
           <label className="audio-toggle"><input type="checkbox" checked={musicEnabled} disabled={project.status !== "active" || working} onChange={(event) => setMusicEnabled(event.target.checked)} /><span>Include background music</span><small>Off by default. Choose a licensed track in a later step.</small></label>

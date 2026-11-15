@@ -112,6 +112,27 @@ export const assetUploadIntentResponseSchema = z.object({
 export const assetCompletionResponseSchema = z.object({ data: z.object({ asset: projectAssetSchema }).strict() }).strict();
 export const assetPreviewResponseSchema = z.object({ data: z.object({ url: z.url(), expiresAt: z.iso.datetime() }).strict() }).strict();
 
+export const narrationVoiceNames = ["Kore", "Puck", "Charon", "Aoede", "Fenrir", "Zephyr"] as const;
+export const narrationAssetPolicy = {
+  maxBytesPerFile: 25 * MiB,
+  maxAssetsPerProject: 20,
+  maxBytesPerUser: 1024 * MiB,
+  readUrlTtlSeconds: 5 * 60,
+  pendingCleanupMs: 10 * 60_000,
+} as const;
+export const narrationAssetQuerySchema = z.object({ voiceName: z.enum(narrationVoiceNames) }).strict();
+export const projectNarrationAssetSchema = z.object({
+  id: z.string().regex(/^[a-f\d]{24}$/i),
+  storyboardId: z.string().regex(/^[a-f\d]{24}$/i),
+  storyboardVersion: z.number().int().positive(),
+  voiceName: z.enum(narrationVoiceNames),
+  sizeBytes: z.number().int().positive(),
+  createdAt: z.iso.datetime(),
+}).strict();
+export type ProjectNarrationAsset = z.infer<typeof projectNarrationAssetSchema>;
+export const projectNarrationAssetsResponseSchema = z.object({ data: z.object({ items: z.array(projectNarrationAssetSchema) }).strict() }).strict();
+export const narrationAssetResponseSchema = z.object({ data: z.object({ asset: projectNarrationAssetSchema }).strict() }).strict();
+
 export const createProjectRequestSchema = z.object({
   title: z.string().trim().min(1).max(120),
   topic: z.string().trim().max(2_000).optional(),

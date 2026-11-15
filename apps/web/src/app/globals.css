@@ -268,6 +268,20 @@ h1 { margin: 0; font-size: clamp(34px, 4vw, 46px); font-weight: 600; letter-spac
 .voice-preview audio { width: 100%; min-height: 36px; }
 .voice-feedback, .voice-privacy-note { grid-column: 1 / -1; }
 .voice-privacy-note { margin: -6px 0 0; }
+.narration-library { display: grid; gap: 12px; grid-column: 1 / -1; padding: 16px; border: 1px solid rgba(255,255,255,.08); border-radius: 6px; background: rgba(255,255,255,.02); }
+.narration-library-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.narration-library-heading h3 { margin: 0; font-size: 16px; }
+.narration-library-heading .detail-copy { margin: 6px 0 0; }
+.narration-save-button { justify-self: start; }
+.narration-empty { margin: 0; color: var(--quiet); font-size: 11px; }
+.narration-assets-list { display: grid; gap: 10px; }
+.narration-asset { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px 16px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.07); }
+.narration-asset-copy { display: grid; min-width: 0; gap: 4px; }
+.narration-asset-copy strong { overflow-wrap: anywhere; color: #e3e1dc; font-size: 11px; }
+.narration-asset-copy small { color: var(--quiet); font-size: 10px; }
+.narration-asset-actions { display: flex; align-items: center; gap: 8px; }
+.narration-saved-player { grid-column: 1 / -1; width: 100%; min-height: 36px; }
+.narration-library .form-feedback { margin: 0; }
 .detail-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 20px; }
 .detail-actions > span { color: var(--quiet); font-size: 10px; }
 
@@ -581,6 +595,9 @@ h1 { margin: 0; font-size: clamp(34px, 4vw, 46px); font-weight: 600; letter-spac
   .detail-heading { align-items: flex-start; }
   .audio-panel { grid-template-columns: 1fr; }
   .audio-panel > div, .audio-panel > button { grid-column: 1; }
+  .narration-library { grid-column: 1; }
+  .narration-asset { grid-template-columns: 1fr; }
+  .narration-asset-actions { flex-wrap: wrap; }
   .workspace-footer { font-size: 9px; }
   .storyboard-heading, .storyboard-footer { align-items: flex-start; flex-direction: column; }
   .storyboard-footer > div { width: 100%; flex-wrap: wrap; }

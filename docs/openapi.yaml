@@ -559,6 +559,146 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
+  /projects/{projectId}/narration-assets:
+    get:
+      operationId: listSavedNarrationAssets
+      tags: [Voice]
+      summary: List privately saved narration for an owned project
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Saved narration metadata, newest first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectNarrationAssetsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          description: Owned project was not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '503':
+          $ref: '#/components/responses/ProjectsUnavailable'
+  /projects/{projectId}/storyboards/{storyboardId}/narration-assets:
+    post:
+      operationId: saveStoryboardNarrationAsset
+      tags: [Voice]
+      summary: Explicitly save a generated WAV preview to private R2 storage
+      description: >-
+        Saves only when the user explicitly requests it. Requires an active owned project and an
+        owned saved storyboard. WAV files are limited to 25 MiB, 20 assets per project and 1 GiB
+        per user. Saved audio remains private until the user deletes it; pending and failed deletes
+        are retried by the cleanup worker.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: storyboardId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+        - name: voiceName
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [Kore, Puck, Charon, Aoede, Fenrir, Zephyr]
+      requestBody:
+        required: true
+        content:
+          audio/wav:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '201':
+          description: Audio stored privately and its metadata returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NarrationAssetResponse'
+        '400':
+          description: Invalid WAV data, IDs or voice name
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          description: Active owned project or saved storyboard was not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '413':
+          description: File or project/account saved narration quota exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '503':
+          description: Private object storage or database is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+  /projects/{projectId}/narration-assets/{assetId}/preview:
+    get:
+      operationId: getSavedNarrationPreviewUrl
+      tags: [Voice]
+      summary: Create a short-lived private URL for a saved narration file
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AssetId'
+      responses:
+        '200':
+          description: Expiring private audio URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetPreviewResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          description: Owned saved narration was not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '503':
+          $ref: '#/components/responses/ProjectsUnavailable'
+  /projects/{projectId}/narration-assets/{assetId}:
+    delete:
+      operationId: deleteSavedNarrationAsset
+      tags: [Voice]
+      summary: Delete a saved narration file with retryable private-object cleanup
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AssetId'
+      responses:
+        '204':
+          description: Narration removed or already absent
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '503':
+          description: Object cleanup remains queued and will retry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
   /projects/{projectId}/storyboards/{storyboardId}/approve:
     parameters:
       - $ref: '#/components/parameters/ProjectId'
@@ -936,6 +1076,50 @@ components:
             expiresAt:
               type: string
               format: date-time
+    ProjectNarrationAssetsResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProjectNarrationAsset'
+    ProjectNarrationAsset:
+      type: object
+      required: [id, storyboardId, storyboardVersion, voiceName, sizeBytes, createdAt]
+      properties:
+        id:
+          type: string
+          pattern: '^[a-fA-F0-9]{24}$'
+        storyboardId:
+          type: string
+          pattern: '^[a-fA-F0-9]{24}$'
+        storyboardVersion:
+          type: integer
+          minimum: 1
+        voiceName:
+          type: string
+          enum: [Kore, Puck, Charon, Aoede, Fenrir, Zephyr]
+        sizeBytes:
+          type: integer
+          minimum: 1
+        createdAt:
+          type: string
+          format: date-time
+    NarrationAssetResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [asset]
+          properties:
+            asset:
+              $ref: '#/components/schemas/ProjectNarrationAsset'
     ProjectSettings:
       type: object
       additionalProperties: false

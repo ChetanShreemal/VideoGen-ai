@@ -17,6 +17,7 @@ import { StoryboardRepository } from "./projects/storyboard-repository.js";
 import { registerAssetRoutes } from "./assets/asset-routes.js";
 import { registerGenerationRoutes } from "./generations/generation-routes.js";
 import { registerVoiceRoutes } from "./voice/voice-routes.js";
+import { registerNarrationAssetRoutes } from "./voice/narration-asset-routes.js";
 
 if (config.MONGODB_DNS_SERVERS?.length) {
   setServers(config.MONGODB_DNS_SERVERS);
@@ -43,12 +44,14 @@ await app.register(fastifyCors, {
   origin: trustedWebOrigins,
   credentials: true,
   methods: ["GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"],
+  exposedHeaders: ["Retry-After"],
 });
 
 await registerProjectRoutes(app, auth, projectRepository, storyboardRepository);
 await registerAssetRoutes(app, auth, database, projectRepository);
 await registerGenerationRoutes(app, auth, database, projectRepository, storyboardRepository);
 await registerVoiceRoutes(app, auth, database, projectRepository, storyboardRepository);
+await registerNarrationAssetRoutes(app, auth, database, projectRepository, storyboardRepository);
 
 app.route({
   method: ["GET", "POST"],

@@ -24,6 +24,10 @@ export async function createReadUrl(key: string): Promise<string> {
   return getSignedUrl(configuredClient(), new GetObjectCommand({ Bucket: r2Bucket, Key: key }), { expiresIn: 300 });
 }
 
+export async function storePrivateObject(key: string, body: Buffer, contentType: string): Promise<void> {
+  await configuredClient().send(new PutObjectCommand({ Bucket: r2Bucket, Key: key, Body: body, ContentType: contentType }));
+}
+
 export async function copyObject(source: string, target: string, contentType: string, sourceETag: string): Promise<void> {
   await configuredClient().send(new CopyObjectCommand({
     Bucket: r2Bucket, Key: target, CopySource: `${r2Bucket}/${encodeURIComponent(source).replaceAll("%2F", "/")}`,

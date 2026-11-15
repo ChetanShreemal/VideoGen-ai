@@ -100,11 +100,11 @@ export default function GenerationProgressPage() {
         <div className="generation-mode-note generation-disclosure"><span className="material-symbols-outlined" aria-hidden="true">info</span><span><strong>Development simulation only.</strong> The progress is persisted and real, but this run does not generate video files or create a preview asset.</span></div>
 
         {error && <div className="form-feedback error generation-error" role="alert"><span>{error}</span><button className="quiet-button" type="button" onClick={() => { setLoading(true); setRefresh((value) => value + 1); }}>Retry status check</button></div>}
-        {loading && !job ? <div className="detail-panel generation-loading" role="status">Loading generation status…</div> : job ? <>
+        {loading && !job ? <div className="detail-panel generation-loading" role="status" aria-live="polite"><span className="material-symbols-outlined generation-loading-spinner" aria-hidden="true">progress_activity</span><div><strong>Loading your generation run</strong><p>Fetching the latest scene progress…</p></div></div> : job ? <>
           <div className="generation-summary-row">
             <article className="generation-summary-card"><span className="material-symbols-outlined complete-icon" aria-hidden="true">check_circle</span><strong>{completeCount} processed</strong><small>Scene steps simulated</small></article>
-            <article className="generation-summary-card"><span className="material-symbols-outlined running-icon" aria-hidden="true">sync</span><strong>{runningCount} in progress</strong><small>Currently active</small></article>
-            <article className="generation-summary-card"><span className="material-symbols-outlined queued-icon" aria-hidden="true">hourglass_top</span><strong>{queuedCount} queued</strong><small>Waiting their turn</small></article>
+            <article className="generation-summary-card"><span className={`material-symbols-outlined ${runningCount > 0 ? "running-icon" : job.status === "completed" ? "complete-icon" : job.status === "failed" ? "failed-icon" : "queued-icon"}`} aria-hidden="true">{runningCount > 0 ? "sync" : job.status === "completed" ? "check_circle" : job.status === "failed" ? "error" : "schedule"}</span><strong>{runningCount} in progress</strong><small>{runningCount > 0 ? "Currently active" : job.status === "completed" ? "No active scenes" : job.status === "failed" ? "Run stopped" : "Waiting to start"}</small></article>
+            <article className="generation-summary-card"><span className="material-symbols-outlined queued-icon" aria-hidden="true">hourglass_top</span><strong>{queuedCount} queued</strong><small>{job.status === "completed" ? "No scenes waiting" : job.status === "failed" ? "Run stopped" : "Waiting their turn"}</small></article>
           </div>
 
           <div className="generation-workbench">

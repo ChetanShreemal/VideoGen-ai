@@ -211,12 +211,13 @@ export async function registerGenerationRoutes(
     const requestFingerprint = createHash("sha256").update(JSON.stringify({ projectId: projectId.toHexString(), storyboardId: storyboardId.toHexString() })).digest("hex");
     try {
       await initializeJobs();
+      if (config.NODE_ENV === "production") return sendError(reply, 503, "GENERATION_PROVIDER_UNAVAILABLE", "Video generation is not configured in this environment.");
+
       const existing = await jobs.findOne({ ownerUserId, operation: "generation", idempotencyKey });
       if (existing) {
         if (existing.requestFingerprint !== requestFingerprint) return sendError(reply, 409, "IDEMPOTENCY_CONFLICT", "This Idempotency-Key was already used with a different generation request.");
         return responseFor(reply, existing);
       }
-      if (config.NODE_ENV === "production") return sendError(reply, 503, "GENERATION_PROVIDER_UNAVAILABLE", "Video generation is not configured in this environment.");
 
       const project = await projects.get(ownerUserId, projectId);
       if (!project) return sendError(reply, 404, "PROJECT_NOT_FOUND", "Project was not found.");

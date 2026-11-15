@@ -23,6 +23,12 @@ export function ReferenceAssetsPanel({ projectId, active }: Props) {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
+  useEffect(() => {
+    if (!message) return;
+    const timeout = window.setTimeout(() => setMessage(""), 5_000);
+    return () => window.clearTimeout(timeout);
+  }, [message]);
+
   const loadAssets = useCallback(async (signal: AbortSignal): Promise<ProjectAsset[]> => {
     const response = await fetch(`${apiBaseURL}/projects/${projectId}/assets`, { credentials: "include", cache: "no-store", signal });
     if (!response.ok) throw new Error("Reference assets could not be loaded.");

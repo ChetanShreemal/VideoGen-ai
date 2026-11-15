@@ -1,8 +1,10 @@
+import { randomUUID } from "node:crypto";
 import { fromNodeHeaders } from "better-auth/node";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { ObjectId } from "mongodb";
+import { ObjectId, type Collection, type Document } from "mongodb";
 import { z } from "zod";
 import { apiErrorResponseSchema, projectIdParamsSchema } from "@videogen/contracts";
+import type { MongoDatabase } from "@videogen/database";
 import type { createAuth } from "../auth.js";
 import { config } from "../config.js";
 import { ProjectRepository } from "../projects/project-repository.js";
@@ -12,7 +14,14 @@ type VoiceAuth = ReturnType<typeof createAuth>;
 const voiceNames = ["Kore", "Puck", "Charon", "Aoede", "Fenrir", "Zephyr"] as const;
 const requestSchema = z.object({ voiceName: z.enum(voiceNames) }).strict();
 const requestTimeoutMs = 90_000;
+const reservationLeaseMs = 120_000;
 const maxNarrationCharacters = 8_000;
+
+interface VoiceLimitDocument extends Document {
+  _id: string;
+  activeRequests: Array<{ requestId: string; expiresAt: Date }>;
+  updatedAt: Date;
+}
 
 function sendError(reply: FastifyReply, statusCode: number, code: string, message: string) {
   return reply.status(statusCode).send(apiErrorResponseSchema.parse({ error: { code, message } }));
@@ -48,9 +57,50 @@ function extractWav(payload: unknown): Buffer | undefined {
 export async function registerVoiceRoutes(
   app: FastifyInstance,
   auth: VoiceAuth,
+  mongo: MongoDatabase,
   projects: ProjectRepository,
   storyboards: StoryboardRepository,
 ): Promise<void> {
+  const limits: Collection<VoiceLimitDocument> = mongo.database().collection("voice_generation_limits");
+
+  const reserveRequest = async (ownerUserId: string): Promise<string | undefined> => {
+    const now = new Date();
+    const requestId = randomUUID();
+    const activeRequests = {
+      $filter: {
+        input: { $ifNull: ["$activeRequests", []] },
+        as: "request",
+        cond: { $gt: ["$$request.expiresAt", now] },
+      },
+    };
+    try {
+      const updated = await limits.findOneAndUpdate(
+        {
+          _id: ownerUserId,
+          $expr: { $lt: [{ $size: activeRequests }, 1] },
+        },
+        [{ $set: {
+          activeRequests: { $concatArrays: [activeRequests, [{ requestId, expiresAt: new Date(now.getTime() + reservationLeaseMs) }]] },
+          updatedAt: now,
+        } }],
+        { upsert: true, returnDocument: "after" },
+      );
+      return updated?.activeRequests.some((request) => request.requestId === requestId) ? requestId : undefined;
+    } catch (error) {
+      // If another request created the per-user lock first, Mongo's unique _id rejects this upsert.
+      if (typeof error === "object" && error !== null && "code" in error && error.code === 11000) return undefined;
+      throw error;
+    }
+  };
+
+  const releaseRequest = async (ownerUserId: string, requestId: string, request: FastifyRequest): Promise<void> => {
+    try {
+      await limits.updateOne({ _id: ownerUserId }, { $pull: { activeRequests: { requestId } } } as Document);
+    } catch {
+      request.log.warn("Voice generation reservation release failed; it will expire automatically.");
+    }
+  };
+
   app.post("/api/v1/projects/:projectId/storyboards/:storyboardId/narration-audio", async (request, reply) => {
     const ownerUserId = await requireUser(request, reply, auth);
     if (!ownerUserId) return;
@@ -78,41 +128,57 @@ export async function registerVoiceRoutes(
       if (!narration) return sendError(reply, 400, "NARRATION_EMPTY", "Add narration to the storyboard before generating a voice preview.");
       if (narration.length > maxNarrationCharacters) return sendError(reply, 413, "NARRATION_TOO_LONG", "This storyboard is too long for one voice preview. Shorten the narration and try again.");
 
-      const providerResponse = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-goog-api-key": config.GEMINI_API_KEY },
-        signal: AbortSignal.timeout(requestTimeoutMs),
-        body: JSON.stringify({
-          model: "gemini-3.8-flash-lite-tts",
-          input: [{
-            type: "user_input",
-            content: [{
-              type: "text",
-              text: narration,
-              annotations: [{ type: "speech_metadata", style: "Clear, natural educational narration at a measured pace." }],
-            }],
-          }],
-          response_format: { type: "audio" },
-          generation_config: { speech_config: [{ voice: voiceName }] },
-          store: false,
-        }),
-      });
-      if (!providerResponse.ok) {
-        request.log.warn({ statusCode: providerResponse.status }, "Gemini narration request failed.");
-        return sendError(reply, providerResponse.status === 429 ? 429 : 502, providerResponse.status === 429 ? "VOICE_QUOTA_EXCEEDED" : "VOICE_GENERATION_FAILED", providerResponse.status === 429 ? "Gemini's free-tier voice limit was reached. Try again later." : "Gemini could not generate this voice preview. Try again.");
+      let reservationId: string | undefined;
+      try {
+        reservationId = await reserveRequest(ownerUserId);
+      } catch {
+        request.log.error("Voice generation limit could not be reserved.");
+        return sendError(reply, 503, "VOICE_GENERATION_UNAVAILABLE", "Voice generation is temporarily unavailable.");
+      }
+      if (!reservationId) {
+        reply.header("retry-after", "60");
+        return sendError(reply, 429, "VOICE_CONCURRENCY_LIMIT", "A voice preview is already being generated for this account. Wait for it to finish before starting another.");
       }
 
-      const wav = extractWav(await providerResponse.json());
-      if (!wav) {
-        request.log.warn("Gemini narration response did not contain a valid WAV file.");
-        return sendError(reply, 502, "VOICE_GENERATION_FAILED", "Gemini returned an audio format the app could not play.");
+      try {
+        const providerResponse = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-goog-api-key": config.GEMINI_API_KEY },
+          signal: AbortSignal.timeout(requestTimeoutMs),
+          body: JSON.stringify({
+            model: "gemini-3.8-flash-lite-tts",
+            input: [{
+              type: "user_input",
+              content: [{
+                type: "text",
+                text: narration,
+                annotations: [{ type: "speech_metadata", style: "Clear, natural educational narration at a measured pace." }],
+              }],
+            }],
+            response_format: { type: "audio" },
+            generation_config: { speech_config: [{ voice: voiceName }] },
+            store: false,
+          }),
+        });
+        if (!providerResponse.ok) {
+          request.log.warn({ statusCode: providerResponse.status }, "Gemini narration request failed.");
+          return sendError(reply, providerResponse.status === 429 ? 429 : 502, providerResponse.status === 429 ? "VOICE_QUOTA_EXCEEDED" : "VOICE_GENERATION_FAILED", providerResponse.status === 429 ? "Gemini's free-tier voice limit was reached. Try again later." : "Gemini could not generate this voice preview. Try again.");
+        }
+
+        const wav = extractWav(await providerResponse.json());
+        if (!wav) {
+          request.log.warn("Gemini narration response did not contain a valid WAV file.");
+          return sendError(reply, 502, "VOICE_GENERATION_FAILED", "Gemini returned an audio format the app could not play.");
+        }
+        return reply
+          .header("content-type", "audio/wav")
+          .header("content-disposition", `inline; filename=videogen-narration-v${storyboard.version}.wav`)
+          .header("cache-control", "no-store")
+          .header("x-videogen-storyboard-version", String(storyboard.version))
+          .send(wav);
+      } finally {
+        await releaseRequest(ownerUserId, reservationId, request);
       }
-      return reply
-        .header("content-type", "audio/wav")
-        .header("content-disposition", `inline; filename=videogen-narration-v${storyboard.version}.wav`)
-        .header("cache-control", "no-store")
-        .header("x-videogen-storyboard-version", String(storyboard.version))
-        .send(wav);
     } catch (error) {
       if (error instanceof Error && error.name === "TimeoutError") return sendError(reply, 504, "VOICE_GENERATION_TIMEOUT", "Voice generation took too long. Try again.");
       request.log.error("Narration generation failed.");

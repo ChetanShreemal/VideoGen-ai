@@ -48,7 +48,7 @@ await app.register(fastifyCors, {
 await registerProjectRoutes(app, auth, projectRepository, storyboardRepository);
 await registerAssetRoutes(app, auth, database, projectRepository);
 await registerGenerationRoutes(app, auth, database, projectRepository, storyboardRepository);
-await registerVoiceRoutes(app, auth, projectRepository, storyboardRepository);
+await registerVoiceRoutes(app, auth, database, projectRepository, storyboardRepository);
 
 app.route({
   method: ["GET", "POST"],

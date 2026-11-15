@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import {
   projectResponseEnvelopeSchema,
+  createGenerationJobResponseSchema,
   storyboardEnvelopeSchema,
   storyboardListEnvelopeSchema,
   type StoryboardResponse,
@@ -20,6 +21,7 @@ import { ReferenceAssetsPanel } from "./reference-assets-panel";
 export default function ProjectDetailsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const { data: session, isPending: sessionPending } = authClient.useSession();
+  const router = useRouter();
   const [project, setProject] = useState<ProjectResponse | null>(null);
   const [title, setTitle] = useState("");
   const [topic, setTopic] = useState("");
@@ -33,6 +35,8 @@ export default function ProjectDetailsPage() {
   const [storyboards, setStoryboards] = useState<StoryboardResponse[]>([]);
   const [storyboardContent, setStoryboardContent] = useState<StoryboardContent | null>(null);
   const [storyboardLoading, setStoryboardLoading] = useState(false);
+  const [generationCreating, setGenerationCreating] = useState(false);
+  const [generationError, setGenerationError] = useState("");
 
   useEffect(() => {
     if (sessionPending) return;
@@ -203,6 +207,31 @@ export default function ProjectDetailsPage() {
     finally { setWorking(false); }
   }
 
+  async function startGeneration() {
+    if (!latestStoryboard || latestStoryboard.status !== "approved" || project?.status !== "active") return;
+    setGenerationCreating(true);
+    setGenerationError("");
+    const storageKey = `videogen:generation-idempotency:${projectId}:${latestStoryboard.id}`;
+    try {
+      const idempotencyKey = localStorage.getItem(storageKey) ?? crypto.randomUUID();
+      localStorage.setItem(storageKey, idempotencyKey);
+      const response = await fetch(`${apiBaseURL}/projects/${projectId}/generations`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json", "Idempotency-Key": idempotencyKey },
+        body: JSON.stringify({ storyboardId: latestStoryboard.id }),
+      });
+      if (!response.ok) throw new Error(response.status === 503 ? "Generation is temporarily unavailable. Try again shortly." : "The generation run could not be started. Please retry.");
+      const result = createGenerationJobResponseSchema.parse(await response.json());
+      localStorage.removeItem(storageKey);
+      router.push(`/projects/${projectId}/generation/${result.data.jobId}`);
+    } catch (cause) {
+      setGenerationError(cause instanceof Error ? cause.message : "The generation run could not be started. Please retry.");
+    } finally {
+      setGenerationCreating(false);
+    }
+  }
+
   async function signOut() {
     setWorking(true);
     try {
@@ -243,6 +272,12 @@ export default function ProjectDetailsPage() {
             <label className="field storyboard-closing"><span>Closing / call to action</span><textarea disabled={storyboardReadOnly || working} maxLength={2000} value={storyboardContent.closing} onChange={(event) => setStoryboardContent((current) => current ? { ...current, closing: event.target.value } : current)} /></label>
             <div className="storyboard-footer"><span>{storyboardContent.scenes.reduce((total, scene) => total + (Number(scene.durationSeconds) || 0), 0)} sec total · {storyboardContent.scenes.reduce((total, scene) => total + scene.narration.trim().split(/\s+/).filter(Boolean).length, 0)} narration words</span><div>{canCreateStoryboardVersion ? <button className="quiet-button" disabled={working} onClick={() => void saveStoryboard(true)}>Create new version</button> : storyboardReadOnly ? null : latestStoryboard ? <><button className="quiet-button" disabled={working} onClick={() => void saveStoryboard()}>Save draft</button><button className="primary-button" disabled={working} onClick={() => void approveStoryboard()}>Approve storyboard<span aria-hidden="true">→</span></button></> : <button className="primary-button" disabled={working} onClick={() => void saveStoryboard()}>Save storyboard<span aria-hidden="true">→</span></button>}</div></div>
           </>}
+        </section>
+        <section className="detail-panel generation-launch-panel" id="generation" aria-labelledby="generation-launch-title">
+          <div><p className="eyebrow">SCENE GENERATION · STEP 4</p><h2 id="generation-launch-title">Generate your scenes</h2><p className="detail-copy">Start from the approved storyboard. Your run will show live job progress in the generation workbench.</p></div>
+          <div className="generation-mode-note"><span className="material-symbols-outlined" aria-hidden="true">info</span><span><strong>Development simulation</strong><br />This run demonstrates the progress flow and does not create video files.</span></div>
+          {latestStoryboard?.status === "approved" && project.status === "active" ? <button className="primary-button generation-start-button" disabled={generationCreating || working} onClick={() => void startGeneration()} type="button"><span className="material-symbols-outlined" aria-hidden="true">play_arrow</span>{generationCreating ? "Starting simulation…" : "Run simulated generation"}</button> : <p className="generation-locked-note">{project.status !== "active" ? "Restore this project before starting a generation run." : latestStoryboard ? "Approve the storyboard above before starting a generation run." : "Save and approve a storyboard before starting a generation run."}</p>}
+          {generationError && <p className="form-feedback error" role="alert">{generationError}</p>}
         </section>
         <div className="detail-actions">{project.status === "active" ? <button className="quiet-button" disabled={working} onClick={() => void changeStatus("archive")}>Archive project</button> : <button className="quiet-button" disabled={working} onClick={() => void changeStatus("restore")}>Restore project</button>}<span>Revision {project.revision}</span></div>
       </>}

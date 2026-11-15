@@ -2,10 +2,9 @@
 
 import Link from "next/link";
 
-type WorkspaceArea = "projects" | "storyboard" | "audio";
+type WorkspaceArea = "projects" | "storyboard" | "audio" | "generation";
 
 const futureNavigation = [
-  ["hourglass_top", "Generation Progress"],
   ["rate_review", "Video Preview & Review"],
   ["perm_media", "Media Library"],
   ["history", "Generation History"],
@@ -19,6 +18,7 @@ export function WorkspaceShell({
   email,
   active,
   projectId,
+  generationHref,
   onSignOut,
   onCreateVideo,
   signingOut = false,
@@ -28,6 +28,7 @@ export function WorkspaceShell({
   email: string;
   active: WorkspaceArea;
   projectId?: string;
+  generationHref?: string;
   onSignOut?: () => void;
   onCreateVideo?: () => void;
   signingOut?: boolean;
@@ -60,6 +61,11 @@ export function WorkspaceShell({
           <Link className={active === "audio" ? "studio-nav-link active" : "studio-nav-link"} href={projectHref ? `${projectHref}#audio-settings-title` : "/"} aria-label="Voice & Audio Studio" title="Voice & Audio Studio" aria-current={active === "audio" ? "page" : undefined}>
             <span className="material-symbols-outlined" aria-hidden="true">mic</span><span>Voice &amp; Audio Studio</span>
           </Link>
+          {projectHref ? <Link className={active === "generation" ? "studio-nav-link active" : "studio-nav-link"} href={generationHref ?? `${projectHref}#generation`} aria-label="Generation Progress" title="Generation Progress" aria-current={active === "generation" ? "page" : undefined}>
+            <span className="material-symbols-outlined" aria-hidden="true">hourglass_top</span><span>Generation Progress</span>
+          </Link> : <span className="studio-nav-link unavailable" aria-disabled="true" title="Generation Progress is available inside a project">
+            <span className="material-symbols-outlined" aria-hidden="true">hourglass_top</span><span>Generation Progress</span>
+          </span>}
           <div className="studio-nav-divider" />
           {futureNavigation.map(([icon, label]) => (
             <span className="studio-nav-link unavailable" key={label} aria-disabled="true" title={`${label} screen is planned, but not implemented yet`}>

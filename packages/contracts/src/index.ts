@@ -206,6 +206,48 @@ export type StoryboardResponse = z.infer<typeof storyboardResponseSchema>;
 export const storyboardEnvelopeSchema = z.object({ data: z.object({ storyboard: storyboardResponseSchema }).strict() }).strict();
 export const storyboardListEnvelopeSchema = z.object({ data: z.object({ items: z.array(storyboardResponseSchema) }).strict() }).strict();
 
+export const createGenerationJobRequestSchema = z.object({
+  storyboardId: z.string().regex(/^[a-f\d]{24}$/i),
+}).strict();
+export type CreateGenerationJobRequest = z.infer<typeof createGenerationJobRequestSchema>;
+
+export const generationJobStatusSchema = z.enum(["queued", "running", "completed", "failed"]);
+export const generationJobStageSchema = z.enum(["queued", "preparing", "processing_scenes", "assembling", "completed", "failed"]);
+export const generationSceneProgressSchema = z.object({
+  sceneId: z.string().min(1).max(80),
+  title: z.string().min(1).max(120),
+  status: z.enum(["queued", "running", "completed", "failed"]),
+  progressPercent: z.number().int().min(0).max(100),
+}).strict();
+export const generationJobSchema = z.object({
+  id: z.string().regex(/^[a-f\d]{24}$/i),
+  projectId: z.string().regex(/^[a-f\d]{24}$/i),
+  storyboardId: z.string().regex(/^[a-f\d]{24}$/i),
+  storyboardVersion: z.number().int().positive(),
+  provider: z.literal("mock"),
+  simulated: z.literal(true),
+  status: generationJobStatusSchema,
+  stage: generationJobStageSchema,
+  progressPercent: z.number().int().min(0).max(100),
+  scenes: z.array(generationSceneProgressSchema).min(1).max(50),
+  videoAssetId: z.null(),
+  error: z.object({ code: z.string().min(1), message: z.string().min(1) }).strict().optional(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+  startedAt: z.iso.datetime().optional(),
+  completedAt: z.iso.datetime().optional(),
+}).strict();
+export type GenerationJob = z.infer<typeof generationJobSchema>;
+export const generationJobEnvelopeSchema = z.object({ data: z.object({ job: generationJobSchema }).strict() }).strict();
+export const createGenerationJobResponseSchema = z.object({
+  data: z.object({
+    jobId: z.string().regex(/^[a-f\d]{24}$/i),
+    status: generationJobStatusSchema,
+    statusUrl: z.string().min(1),
+    simulated: z.literal(true),
+  }).strict(),
+}).strict();
+
 export const apiErrorResponseSchema = z.object({
   error: z.object({
     code: z.string().min(1),

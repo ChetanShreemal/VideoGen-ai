@@ -1,6 +1,6 @@
 # AI VideoGen — Project Status and Work Tracker
 
-**Last updated:** 2026-11-14
+**Last updated:** 2026-11-15
 **Document owner:** Project team  
 **Purpose:** This is the ongoing source of truth for project work. Keep planned, completed, tested, remaining, blocked, and decided work here. Update it whenever project status changes and at the end of each work session.
 
@@ -24,7 +24,7 @@
 | Design | Google Stitch project exists and has been iterated; latest full-project QA is incomplete |
 | Requirements and technical specs | PRD, System Design, and API Design exist as review drafts in `C:\Users\Chetan\Downloads`; they are not yet in this repository |
 | Repository contents | Initial scaffold and design/status docs committed as `8090b62`; `main` is stable and ongoing work is on `dev`, tracking `origin/dev` |
-| Immediate priority | Restore Atlas database readiness and verify authentication end to end; then finish storyboard device-size QA and decide AI script provider, voice options, job orchestration and cost controls before enabling provider-backed brainstorming or generation |
+| Immediate priority | Build the Stitch-aligned generation progress/results UI against the persisted development job API; choose and configure a real generation provider before production video generation |
 
 ## Product and architecture baseline
 
@@ -126,7 +126,7 @@ Update each row as work changes. Add links to PRs, commits, screenshots, test re
 | Phase | Scope | Status | Exit criteria |
 |---|---|---|---|
 | A — Foundation | App structure, shared schemas, authentication, private workspace ownership, project CRUD, database indexes, API docs, local dev setup | In progress | Starter apps/contracts created; MongoDB/API design is now drafted; exit criteria not met until auth and owned project CRUD work | Review the database/API proposal and settle adapter/local DB setup; then implement database readiness and the project slice in small steps |
-| B — Creation and generation | Ideas/scripts, versioned storyboard, uploads, voice/audio, async provider jobs, progress/retries | In progress | Idea setup and first manual versioned storyboard editor/API are implemented; storyboard runtime verification, AI provider jobs, uploads, audio and progress/recovery remain |
+| B — Creation and generation | Ideas/scripts, versioned storyboard, uploads, voice/audio, async provider jobs, progress/retries | In progress | Manual storyboard, uploads and audio slices exist. A persisted generation-job API now simulates progress in development only; real video provider, UI, cancellation/retry and worker recovery remain |
 | C — Rendering | Remotion composition, render adapters, output validation, R2 persistence, preview/download | Not started | Verified MP4 rendered, stored durably, and previewed/downloaded from the app |
 | D — Instagram | Meta OAuth, account lifecycle, reviewed post draft, explicit approval, publish job and reconciliation | Not started | Approved post publishes once to an eligible account and visible status is reconciled |
 | E — Hardening | Security, quotas, cost/usage, observability, backups, recovery, load testing and deployment | Not started | Operational runbooks and documented recovery from worker/provider failures |
@@ -137,6 +137,12 @@ Update each row as work changes. Add links to PRs, commits, screenshots, test re
 |---|---|---|---|---|
 | AUD-01 | Persist narration volume, music volume, and music enabled preferences per project | Done | Shared Zod/OpenAPI contract, project detail controls and owner-scoped revision-checked PATCH persistence are implemented. Live API verified save/reload and rejected out-of-range volume; browser verified save/reload and responsive layouts at desktop, tablet and phone widths | Decide supported voice/language matrix and validate the provider before implementing voice selection or audio generation |
 | ASSET-01 | Define and implement private reference uploads | In progress | Private `videogen` R2 bucket credentials are configured locally and bucket access was verified. Added owner-scoped signed upload intents, Mongo metadata, quota checks, server-side signature/image/video checks, ETag-conditional reads and source copies, completion, preview URLs, and retryable delete routes. Added project detail reference-media upload/list/preview/delete UI; web/API builds pass and browser confirms empty state loads without errors. Browser upload, exact bucket CORS, orphan cleanup, account deletion purge, and production hardening remain | Configure bucket CORS for local web origins; exercise full upload/overwrite race/preview/delete; add scheduled orphan cleanup and account-deletion purge before enabling for production |
+
+### E3. Generation job API foundation
+
+| ID | Work item | Status | Completion / verification evidence | Next action |
+|---|---|---|---|---|
+| GEN-01 | Persist owner-scoped async generation jobs from approved storyboards | In progress | Added strict job contracts, MongoDB job records, approved-storyboard snapshot, idempotency-key conflict/replay handling, owner-scoped polling, and a development-only simulated lifecycle. API build passed. No live API/database lifecycle was run; the simulator creates no video or asset | Build Stitch-aligned generation progress/results UI and verify browser polling; select/configure a real provider before production generation |
 
 ### F. Testing and verification
 
@@ -209,6 +215,7 @@ This is the persistent test-case register. Update **Status**, **Actual result / 
 | T-061 | Reference-media project UI | Active project shows upload, rights confirmation, list, preview and delete controls; archived project stays read-only | Partial | Web typecheck/production build passed. Browser project page shows the new empty state and controls; asset API list now responds successfully after restarting the API. CORS prevents confirming an actual browser upload until the pending bucket policy is saved; upload/preview/delete not run | 2026-11-14 |
 | T-062 | Reference upload overwrite race | Reusing an unexpired signed PUT URL between verification and promotion cannot make unverified bytes ready | Needs verification | API now binds `GetObject` to the HEAD ETag with `If-Match` and binds `CopyObject` to the same source ETag with `CopySourceIfMatch`; condition failures return 409. No race test or live R2 copy was run | 2026-11-14 |
 | T-063 | Reference media project navigation | After switching projects, the panel clears old assets/previews and ignores late results or errors from the previous project's request | Passed (build); delayed-response browser test not run | Load results now remain data until the effect confirms its project is current; project changes abort the prior request, clear state, and key/remount the panel. No artificial delay test was performed | 2026-11-14 |
+| T-064 | Generation job API contracts and build | Contracts accept the async response model; API compiles routes for idempotent job creation and owner-scoped polling | Passed (API build); live API lifecycle not run | `npm run build --workspace @videogen/api` passed, including contracts/database builds. No Mongo-backed job was created and no request lifecycle was exercised | 2026-11-15 |
 
 ### Test execution update log
 
@@ -262,6 +269,7 @@ This is the persistent test-case register. Update **Status**, **Actual result / 
 
 | Date | Work completed | Checks performed | Remaining / next starting task |
 |---|---|---|---|
+| 2026-11-15 | Added the initial async generation API slice: approved-storyboard job snapshots, Mongo persistence, Idempotency-Key replay/conflict handling, owner-scoped polling, OpenAPI docs, and a development-only simulated progress runner | API build passed; no live API lifecycle or browser test was run. Simulation creates no video or media asset | Implement the matching Stitch progress/results UI and verify polling in the browser. Select/configure a real provider before production generation |
 | 2026-11-02 | Inspected repository/specs; scaffolded npm workspaces, web/API shells and health contract; built responsive sign-in mock; added MongoDB readiness and implemented the first Better Auth email/password slice with sign-in, signup, sign-out and `/api/v1/me` | Typechecks, API build, readiness, unauthenticated 401, signup, sign-in/profile, sign-out/revocation passed; disposable test data cleanup confirmed. Web production build compiled but Next's TypeScript phase was blocked by Windows `spawn EPERM`. Earlier mock browser tests passed at 1440px, 768px and 375px; auth UI visual browser QA still pending | Decide verification policy; verify Resend recovery when configured; then implement owner-scoped project CRUD |
 | 2026-11-03 | Wired Resend password recovery and added request/reset screens; updated `.env.example`, README, and project tracker; configured the local ignored `.env` with Resend settings | Key format checked and `.env` ignore status confirmed; email delivery and password reset not tested | Restart API, complete T-036 using the configured test recipient, then continue owner-scoped project CRUD |
 | 2026-11-03 | Fixed the stuck local auth screen by allowing the `127.0.0.1` dev origin in Next.js; confirmed Atlas and API readiness; restarted the dev server | API readiness returned 200; web TypeScript check passed; browser session check resolved and sign-in, sign-up, and password recovery screens opened | Complete T-036 end to end; do not claim password reset works until reset email, new password sign-in, and prior-session revocation are verified |

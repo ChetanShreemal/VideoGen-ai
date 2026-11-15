@@ -33,6 +33,13 @@ export class StoryboardRepository {
     return rows.map((row) => this.toResponse(row));
   }
 
+  async getOwnedVersion(ownerUserId: string, projectId: ObjectId, storyboardId: ObjectId): Promise<StoryboardResponse | null> {
+    const workspaceId = await this.workspaceFor(ownerUserId, projectId);
+    if (!workspaceId) return null;
+    const row = await this.storyboards.findOne({ _id: storyboardId, workspaceId, projectId });
+    return row ? this.toResponse(row) : null;
+  }
+
   async createVersion(ownerUserId: string, projectId: ObjectId, content: StoryboardContent): Promise<StoryboardResponse | null> {
     const workspaceId = await this.workspaceFor(ownerUserId, projectId);
     if (!workspaceId) return null;

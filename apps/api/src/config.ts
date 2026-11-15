@@ -14,6 +14,7 @@ const environmentSchema = z.object({
   BETTER_AUTH_SECRET: z.string().min(32),
   RESEND_API_KEY: z.string().min(1).optional(),
   AUTH_EMAIL_FROM: z.string().min(1).default("VideoGen <onboarding@resend.dev>"),
+  GEMINI_API_KEY: optionalEnvironmentString,
   MONGODB_DNS_SERVERS: z
     .string()
     .optional()

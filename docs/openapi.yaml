@@ -13,6 +13,8 @@ tags:
     description: Owner-scoped project creation, reading, updating, and lifecycle management
   - name: Generation
     description: Asynchronous generation jobs and status polling
+  - name: Voice
+    description: Authenticated storyboard narration previews
 paths:
   /projects:
     post:
@@ -463,6 +465,89 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '404':
           description: Project or storyboard was not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+  /projects/{projectId}/storyboards/{storyboardId}/narration-audio:
+    post:
+      operationId: generateStoryboardNarrationAudio
+      tags: [Voice]
+      summary: Generate a temporary narration preview for a saved storyboard
+      description: >-
+        Sends the saved storyboard narration to Gemini 3.8 Flash-Lite TTS and returns a WAV preview.
+        Requires the server-side GEMINI_API_KEY. Google may use free-tier inputs and outputs to improve
+        its products. No audio file is persisted by this endpoint.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: storyboardId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [voiceName]
+              properties:
+                voiceName:
+                  type: string
+                  enum: [Kore, Puck, Charon, Aoede, Fenrir, Zephyr]
+      responses:
+        '200':
+          description: Generated WAV audio for immediate preview; not stored
+          content:
+            audio/wav:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Voice, IDs, or saved storyboard narration are invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          description: Project or storyboard was not found for this account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '409':
+          description: Project is archived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '429':
+          description: Gemini free-tier quota was exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '502':
+          description: Gemini generation or audio response failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '503':
+          description: Voice provider or API unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '504':
+          description: Voice generation timed out
           content:
             application/json:
               schema:

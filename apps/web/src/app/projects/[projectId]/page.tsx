@@ -28,6 +28,10 @@ export default function ProjectDetailsPage() {
   const [narrationVolume, setNarrationVolume] = useState(100);
   const [musicVolume, setMusicVolume] = useState(20);
   const [musicEnabled, setMusicEnabled] = useState(false);
+  const [voiceName, setVoiceName] = useState("Kore");
+  const [voicePreviewUrl, setVoicePreviewUrl] = useState("");
+  const [voiceGenerating, setVoiceGenerating] = useState(false);
+  const [voiceError, setVoiceError] = useState("");
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
@@ -37,6 +41,8 @@ export default function ProjectDetailsPage() {
   const [storyboardLoading, setStoryboardLoading] = useState(false);
   const [generationCreating, setGenerationCreating] = useState(false);
   const [generationError, setGenerationError] = useState("");
+
+  useEffect(() => () => { if (voicePreviewUrl) URL.revokeObjectURL(voicePreviewUrl); }, [voicePreviewUrl]);
 
   useEffect(() => {
     if (sessionPending) return;
@@ -48,6 +54,8 @@ export default function ProjectDetailsPage() {
     setLoading(true);
     setStoryboards([]);
     setStoryboardContent(null);
+    setVoicePreviewUrl("");
+    setVoiceError("");
     void fetch(`${apiBaseURL}/projects/${projectId}`, { credentials: "include", cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) throw new Error("Project unavailable");
@@ -149,7 +157,7 @@ export default function ProjectDetailsPage() {
       }
       const result = projectResponseEnvelopeSchema.parse(await response.json());
       setProject(result.data.project);
-      setMessage("Audio preferences saved. They will apply when audio generation is connected.");
+      setMessage("Audio preferences saved.");
     } catch (cause) {
       console.error("Audio preferences save failed.", cause);
       setError("Audio preferences could not be saved because the API could not be reached. Check the API connection and try again.");
@@ -161,6 +169,34 @@ export default function ProjectDetailsPage() {
   const latestStoryboard = storyboards[0] ?? null;
   const storyboardReadOnly = latestStoryboard?.status === "approved" || project?.status !== "active";
   const canCreateStoryboardVersion = latestStoryboard?.status === "approved" && project?.status === "active";
+
+  async function generateVoicePreview() {
+    if (!project || !latestStoryboard) return;
+    setVoiceGenerating(true);
+    setVoiceError("");
+    try {
+      const response = await fetch(`${apiBaseURL}/projects/${projectId}/storyboards/${latestStoryboard.id}/narration-audio`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ voiceName }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null;
+        throw new Error(payload?.error?.message || "Narration could not be generated. Try again.");
+      }
+      const audio = await response.blob();
+      if (audio.type !== "audio/wav" || audio.size < 44) throw new Error("The voice provider returned an audio file the browser could not play.");
+      setVoicePreviewUrl(URL.createObjectURL(audio));
+      setMessage(`Voice preview ready for storyboard version ${latestStoryboard.version}.`);
+    } catch (cause) {
+      setVoiceError(cause instanceof Error ? cause.message : "Narration could not be generated. Try again.");
+    } finally {
+      setVoiceGenerating(false);
+    }
+  }
+
+  const hasSavedNarration = Boolean(latestStoryboard && storyboardContent && JSON.stringify(latestStoryboard.content) === JSON.stringify(storyboardContent));
 
   function updateScene(index: number, field: "title" | "narration" | "visualDescription" | "caption" | "transition" | "durationSeconds", value: string) {
     setStoryboardContent((current) => current ? ({ ...current, scenes: current.scenes.map((scene, sceneIndex) => sceneIndex === index ? { ...scene, [field]: field === "durationSeconds" ? Number(value) : value } : scene) }) : current);
@@ -254,7 +290,12 @@ export default function ProjectDetailsPage() {
           <aside className="detail-panel project-settings-panel"><p className="eyebrow">GENERATION SETTINGS</p><h2>Ready when you are</h2><p className="detail-copy">Set these up in a future step when you turn this idea into a video.</p><dl><div><dt>Duration</dt><dd>{project.settings.durationSeconds ? `${project.settings.durationSeconds}s` : "Not set"}</dd></div><div><dt>Language</dt><dd>{project.settings.language || "Not set"}</dd></div><div><dt>Visual style</dt><dd>{project.settings.visualStyle || "Not set"}</dd></div><div><dt>Aspect ratio</dt><dd>{project.settings.aspectRatio || "Not set"}</dd></div></dl></aside></div>
         <ReferenceAssetsPanel key={projectId} projectId={projectId} active={project.status === "active"} />
         <section className="detail-panel audio-panel" id="audio-settings" aria-labelledby="audio-settings-title">
-          <div><p className="eyebrow">VOICE & AUDIO · STEP 3</p><h2 id="audio-settings-title">Audio mix</h2><p className="detail-copy">Set the balance for narration and background music. These are saved preferences; no audio is generated yet.</p></div>
+          <div><p className="eyebrow">VOICE & AUDIO · STEP 3</p><h2 id="audio-settings-title">Voice & audio</h2><p className="detail-copy">Preview a spoken version of the latest saved storyboard, then set narration and background music levels.</p></div>
+          <label className="field"><span>Narrator voice</span><select value={voiceName} disabled={project.status !== "active" || voiceGenerating || !latestStoryboard} onChange={(event) => setVoiceName(event.target.value)}><option value="Kore">Kore · Warm</option><option value="Puck">Puck · Conversational</option><option value="Charon">Charon · Deep</option><option value="Aoede">Aoede · Expressive</option><option value="Fenrir">Fenrir · Bright</option><option value="Zephyr">Zephyr · Light</option></select></label>
+          <div className="voice-preview-controls"><button className="primary-button" disabled={project.status !== "active" || voiceGenerating || !latestStoryboard || !hasSavedNarration} onClick={() => void generateVoicePreview()} type="button">{voiceGenerating ? "Generating voice…" : voicePreviewUrl ? "Regenerate voice preview" : "Generate voice preview"}<span aria-hidden="true">→</span></button>{!latestStoryboard && <small>Save a storyboard first to generate narration.</small>}{latestStoryboard && !hasSavedNarration && <small>Save your storyboard changes before generating narration.</small>}</div>
+          {voiceError && <p className="form-feedback error voice-feedback" role="alert">{voiceError}</p>}
+          {voicePreviewUrl && <div className="voice-preview"><span className="eyebrow">PREVIEW · VERSION {latestStoryboard?.version}</span><audio controls preload="metadata" src={voicePreviewUrl}>Your browser does not support audio playback.</audio></div>}
+          <p className="voice-privacy-note">Free Gemini tier is subject to usage limits. Google may use free-tier prompts and generated responses to improve its products; don’t include sensitive narration.</p>
           <label className="field audio-range"><span>Narration volume <output>{narrationVolume}%</output></span><input aria-label="Narration volume" type="range" min="0" max="100" step="5" disabled={project.status !== "active" || working} value={narrationVolume} onChange={(event) => setNarrationVolume(Number(event.target.value))} /></label>
           <label className="audio-toggle"><input type="checkbox" checked={musicEnabled} disabled={project.status !== "active" || working} onChange={(event) => setMusicEnabled(event.target.checked)} /><span>Include background music</span><small>Off by default. Choose a licensed track in a later step.</small></label>
           <label className="field audio-range"><span>Music volume <output>{musicVolume}%</output></span><input aria-label="Music volume" type="range" min="0" max="100" step="5" disabled={!musicEnabled || project.status !== "active" || working} value={musicVolume} onChange={(event) => setMusicVolume(Number(event.target.value))} /></label>

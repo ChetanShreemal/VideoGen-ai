@@ -16,6 +16,7 @@ import { ProjectRepository } from "./projects/project-repository.js";
 import { StoryboardRepository } from "./projects/storyboard-repository.js";
 import { registerAssetRoutes } from "./assets/asset-routes.js";
 import { registerGenerationRoutes } from "./generations/generation-routes.js";
+import { registerVoiceRoutes } from "./voice/voice-routes.js";
 
 if (config.MONGODB_DNS_SERVERS?.length) {
   setServers(config.MONGODB_DNS_SERVERS);
@@ -47,6 +48,7 @@ await app.register(fastifyCors, {
 await registerProjectRoutes(app, auth, projectRepository, storyboardRepository);
 await registerAssetRoutes(app, auth, database, projectRepository);
 await registerGenerationRoutes(app, auth, database, projectRepository, storyboardRepository);
+await registerVoiceRoutes(app, auth, projectRepository, storyboardRepository);
 
 app.route({
   method: ["GET", "POST"],

@@ -308,6 +308,19 @@ export const generationVideoPreviewResponseSchema = z.object({
   data: z.object({ url: z.url(), downloadUrl: z.url(), fileName: z.string().min(1), expiresAt: z.iso.datetime() }).strict(),
 }).strict();
 
+export const instagramAccountSchema = z.object({
+  username: z.string().min(1).max(80),
+  accountType: z.enum(["Business", "Media_Creator"]).optional(),
+  connectedAt: z.iso.datetime(),
+  expiresAt: z.iso.datetime(),
+  scopes: z.array(z.string().min(1)).max(20),
+}).strict();
+export type InstagramAccount = z.infer<typeof instagramAccountSchema>;
+export const instagramAccountResponseSchema = z.object({
+  data: z.object({ configured: z.boolean(), account: instagramAccountSchema.nullable() }).strict(),
+}).strict();
+export const instagramConnectResponseSchema = z.object({ data: z.object({ authorizationUrl: z.url() }).strict() }).strict();
+
 export const apiErrorResponseSchema = z.object({
   error: z.object({
     code: z.string().min(1),

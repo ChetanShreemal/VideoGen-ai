@@ -378,6 +378,25 @@ h1 { margin: 0; font-size: clamp(34px, 4vw, 46px); font-weight: 600; letter-spac
 .idea-setup-close:hover { color: var(--text); }
 .project-detail { width: min(100%, 1480px); min-height: calc(100vh - 114px); padding: 30px clamp(22px, 3vw, 44px) 44px; }
 .project-detail { display: flex; flex-direction: column; }
+.instagram-connect-panel { display: grid; max-width: 880px; gap: 22px; padding: clamp(18px, 3vw, 28px); }
+.instagram-connect-copy { display: flex; align-items: flex-start; gap: 16px; }
+.instagram-connect-copy h2 { margin: 0; font-size: 19px; letter-spacing: -.025em; }
+.instagram-connect-copy .detail-copy { max-width: 650px; margin: 7px 0 0; }
+.instagram-connect-icon { display: grid; width: 44px; height: 44px; flex: 0 0 44px; place-items: center; border: 1px solid rgba(242,140,40,.35); border-radius: 4px; background: rgba(242,140,40,.08); color: var(--accent); font-size: 23px; }
+.instagram-not-connected { display: grid; gap: 6px; padding: 16px; border: 1px solid var(--border); background: var(--surface-raised); }
+.instagram-not-connected strong, .instagram-account-copy strong { font-size: 13px; }
+.instagram-not-connected p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.instagram-account-card { display: flex; min-width: 0; align-items: center; gap: 12px; padding: 14px; border: 1px solid var(--border); background: var(--surface-raised); }
+.instagram-account-avatar { display: grid; width: 42px; height: 42px; flex: 0 0 42px; place-items: center; border: 1px solid var(--border-active); border-radius: 50%; color: var(--accent); font: 16px "JetBrains Mono", monospace; }
+.instagram-account-copy { display: grid; min-width: 0; flex: 1; gap: 4px; }
+.instagram-account-copy > span, .instagram-account-copy small { color: var(--muted); font-size: 10px; }
+.instagram-connected-status { border-color: rgba(117,190,141,.3); color: #75be8d; }
+.instagram-action { display: inline-flex; width: fit-content; min-height: 38px; align-items: center; gap: 8px; padding-inline: 14px; }
+.instagram-action .material-symbols-outlined { font-size: 18px; }
+.instagram-setup-note { padding: 14px; border-left: 2px solid var(--accent); background: var(--surface-raised); }
+.instagram-setup-note strong { font-size: 11px; }
+.instagram-setup-note p, .instagram-privacy-note { margin: 6px 0 0; color: var(--muted); font-size: 10px; line-height: 1.65; }
+.instagram-privacy-note { margin-top: -12px; }
 .detail-heading { order: 0; }
 .detail-layout { order: 1; }
 .reference-assets-panel { order: 2; }

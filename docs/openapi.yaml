@@ -15,6 +15,8 @@ tags:
     description: Asynchronous generation jobs and status polling
   - name: Voice
     description: Authenticated storyboard narration previews
+  - name: Instagram
+    description: OAuth connection for an Instagram professional account
 paths:
   /projects:
     post:
@@ -854,6 +856,105 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
+  /instagram/account:
+    get:
+      operationId: getInstagramAccount
+      tags: [Instagram]
+      summary: Get the connected Instagram account
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Configuration and account status; no access token is returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstagramAccountResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '503':
+          description: Instagram account status is temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+    delete:
+      operationId: disconnectInstagramAccount
+      tags: [Instagram]
+      summary: Remove the saved Instagram connection
+      description: Deletes the encrypted account token from VideoGen; the user can separately revoke the app grant in Instagram.
+      security:
+        - sessionCookie: []
+      responses:
+        '204':
+          description: Saved connection removed
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '503':
+          description: Connection could not be removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+  /instagram/oauth/start:
+    post:
+      operationId: startInstagramOAuth
+      tags: [Instagram]
+      summary: Create an Instagram authorization URL
+      description: Creates a one-use, expiring OAuth state bound to the signed-in user's workspace.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Authorization URL for Instagram Login
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: false
+                    required: [authorizationUrl]
+                    properties:
+                      authorizationUrl:
+                        type: string
+                        format: uri
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '503':
+          description: Instagram integration is not configured or temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+  /instagram/oauth/callback:
+    get:
+      operationId: instagramOAuthCallback
+      tags: [Instagram]
+      summary: Complete the one-time Instagram authorization flow
+      description: Instagram redirects here with a short-lived code and opaque state. Tokens are exchanged server-side and the browser is redirected to the trusted app origin.
+      parameters:
+        - name: code
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: error
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to the Instagram connection page with a generic outcome
 components:
   parameters:
     ProjectId:
@@ -1344,6 +1445,32 @@ components:
             nextCursor:
               type: [string, 'null']
               minLength: 1
+    InstagramAccountResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [configured, account]
+          properties:
+            configured: { type: boolean }
+            account:
+              oneOf:
+                - type: 'null'
+                - type: object
+                  additionalProperties: false
+                  required: [username, connectedAt, expiresAt, scopes]
+                  properties:
+                    username: { type: string, minLength: 1, maxLength: 80 }
+                    accountType: { type: string, enum: [Business, Media_Creator] }
+                    connectedAt: { type: string, format: date-time }
+                    expiresAt: { type: string, format: date-time }
+                    scopes:
+                      type: array
+                      maxItems: 20
+                      items: { type: string, minLength: 1 }
     ApiErrorResponse:
       type: object
       additionalProperties: false

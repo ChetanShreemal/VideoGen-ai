@@ -19,6 +19,7 @@ import { registerExportRoutes } from "./assets/export-routes.js";
 import { registerGenerationRoutes } from "./generations/generation-routes.js";
 import { registerVoiceRoutes } from "./voice/voice-routes.js";
 import { registerNarrationAssetRoutes } from "./voice/narration-asset-routes.js";
+import { registerInstagramRoutes } from "./social/instagram-routes.js";
 
 if (config.MONGODB_DNS_SERVERS?.length) {
   setServers(config.MONGODB_DNS_SERVERS);
@@ -54,6 +55,7 @@ await registerExportRoutes(app, auth, database, projectRepository);
 await registerGenerationRoutes(app, auth, database, projectRepository, storyboardRepository);
 await registerVoiceRoutes(app, auth, database, projectRepository, storyboardRepository);
 await registerNarrationAssetRoutes(app, auth, database, projectRepository, storyboardRepository);
+await registerInstagramRoutes(app, auth, database, projectRepository);
 
 app.route({
   method: ["GET", "POST"],

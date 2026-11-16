@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-type WorkspaceArea = "projects" | "storyboard" | "audio" | "generation";
+type WorkspaceArea = "projects" | "storyboard" | "audio" | "generation" | "instagram";
 
 const futureNavigation = [
   ["rate_review", "Video Preview & Review"],
@@ -66,6 +66,9 @@ export function WorkspaceShell({
           </Link> : <span className="studio-nav-link unavailable" aria-disabled="true" title="Generation Progress is available inside a project">
             <span className="material-symbols-outlined" aria-hidden="true">hourglass_top</span><span>Generation Progress</span>
           </span>}
+          <Link className={active === "instagram" ? "studio-nav-link active" : "studio-nav-link"} href="/settings/instagram" aria-label="Instagram Connect" title="Instagram Connect" aria-current={active === "instagram" ? "page" : undefined}>
+            <span className="material-symbols-outlined" aria-hidden="true">photo_camera</span><span>Instagram Connect</span>
+          </Link>
           <div className="studio-nav-divider" />
           {futureNavigation.map(([icon, label]) => (
             <span className="studio-nav-link unavailable" key={label} aria-disabled="true" title={`${label} screen is planned, but not implemented yet`}>
@@ -87,7 +90,7 @@ export function WorkspaceShell({
       </aside>
       <div className="studio-main">
         <header className="studio-topbar">
-          <span className="studio-current-area">{active === "projects" ? "Individual Creator Workspace" : active === "audio" ? "Voice & Audio Studio" : "Project Workspace"}</span>
+          <span className="studio-current-area">{active === "projects" ? "Individual Creator Workspace" : active === "audio" ? "Voice & Audio Studio" : active === "instagram" ? "Instagram Connect" : "Project Workspace"}</span>
           <span className="studio-topbar-user"><span className="studio-avatar" aria-hidden="true">{initials}</span><span>{name || email}</span></span>
         </header>
         <div className="studio-main-content">{children}</div>

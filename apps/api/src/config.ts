@@ -32,6 +32,11 @@ const environmentSchema = z.object({
   R2_ACCESS_KEY_ID: optionalEnvironmentString,
   R2_SECRET_ACCESS_KEY: optionalEnvironmentString,
   ASSET_UPLOADS_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
+  INSTAGRAM_APP_ID: optionalEnvironmentString,
+  INSTAGRAM_APP_SECRET: optionalEnvironmentString,
+  INSTAGRAM_REDIRECT_URI: optionalEnvironmentString.pipe(z.url().optional()),
+  SOCIAL_TOKEN_ENCRYPTION_KEY: optionalEnvironmentString,
+  INSTAGRAM_API_VERSION: optionalEnvironmentString.default("v27.0"),
 }).superRefine((value, context) => {
   const r2Values = [value.R2_ACCOUNT_ID, value.R2_ENDPOINT, value.R2_BUCKET_NAME, value.R2_ACCESS_KEY_ID, value.R2_SECRET_ACCESS_KEY];
   const present = r2Values.filter(Boolean).length;
@@ -46,6 +51,23 @@ const environmentSchema = z.object({
     if (new URL(value.R2_ENDPOINT).origin !== expected) {
       context.addIssue({ code: "custom", path: ["R2_ENDPOINT"], message: "R2 endpoint must match the configured account." });
     }
+  }
+  const instagramValues = [value.INSTAGRAM_APP_ID, value.INSTAGRAM_APP_SECRET, value.INSTAGRAM_REDIRECT_URI, value.SOCIAL_TOKEN_ENCRYPTION_KEY];
+  const instagramPresent = instagramValues.filter(Boolean).length;
+  if (instagramPresent !== 0 && instagramPresent !== instagramValues.length) {
+    context.addIssue({ code: "custom", path: ["INSTAGRAM_APP_ID"], message: "Configure the Instagram app ID, secret, redirect URI and social token encryption key together or leave them all empty." });
+  }
+  if (value.INSTAGRAM_APP_ID && !/^\d+$/.test(value.INSTAGRAM_APP_ID)) {
+    context.addIssue({ code: "custom", path: ["INSTAGRAM_APP_ID"], message: "Instagram app ID must be numeric." });
+  }
+  if (value.NODE_ENV === "production" && value.INSTAGRAM_REDIRECT_URI && new URL(value.INSTAGRAM_REDIRECT_URI).protocol !== "https:") {
+    context.addIssue({ code: "custom", path: ["INSTAGRAM_REDIRECT_URI"], message: "Instagram redirect URI must use HTTPS in production." });
+  }
+  if (value.SOCIAL_TOKEN_ENCRYPTION_KEY && !/^[a-f\d]{64}$/i.test(value.SOCIAL_TOKEN_ENCRYPTION_KEY)) {
+    context.addIssue({ code: "custom", path: ["SOCIAL_TOKEN_ENCRYPTION_KEY"], message: "Social token encryption key must be 64 hexadecimal characters." });
+  }
+  if (value.INSTAGRAM_API_VERSION && !/^v\d+\.0$/.test(value.INSTAGRAM_API_VERSION)) {
+    context.addIssue({ code: "custom", path: ["INSTAGRAM_API_VERSION"], message: "Instagram API version must use the vN.0 format." });
   }
 });
 

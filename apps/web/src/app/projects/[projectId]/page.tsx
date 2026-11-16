@@ -20,6 +20,7 @@ import { ReferenceAssetsPanel } from "./reference-assets-panel";
 import { NarrationAssetsPanel } from "./narration-assets-panel";
 import { LocalRenderPanel } from "./local-render-panel";
 import { ProjectExportsPanel } from "./project-exports-panel";
+import { InstagramPostDraftPanel } from "./instagram-post-draft-panel";
 
 export default function ProjectDetailsPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -377,6 +378,7 @@ export default function ProjectDetailsPage() {
         </section>
         <LocalRenderPanel key={`${projectId}:${latestStoryboard?.id ?? "none"}:${latestStoryboard?.version ?? 0}`} projectId={projectId} projectTitle={project.title} active={project.status === "active"} storyboard={latestStoryboard ?? undefined} mediaRevision={mediaRevision} narrationVolume={narrationVolume} musicVolume={musicVolume} musicEnabled={musicEnabled} onExportSaved={() => setExportsRevision((revision) => revision + 1)} />
         <ProjectExportsPanel projectId={projectId} revision={exportsRevision} />
+        <InstagramPostDraftPanel projectId={projectId} revision={exportsRevision} />
         <div className="detail-actions">{project.status === "active" ? <button className="quiet-button" disabled={working} onClick={() => void changeStatus("archive")}>Archive project</button> : <button className="quiet-button" disabled={working} onClick={() => void changeStatus("restore")}>Restore project</button>}<span>Revision {project.revision}</span></div>
       </>}
     </section><footer className="workspace-footer"><span>© 2026 VideoGen</span><span>Ideas into stories.</span></footer>

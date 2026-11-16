@@ -856,6 +856,100 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
+  /projects/{projectId}/instagram-posts:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      operationId: listInstagramPostDrafts
+      tags: [Instagram]
+      summary: List reviewed-post drafts for a project
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200':
+          description: Drafts with approval state; no tokens are returned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InstagramPostDraftsResponse' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { description: Project was not found }
+    post:
+      operationId: createInstagramPostDraft
+      tags: [Instagram]
+      summary: Create a post draft from a saved project export
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [exportId]
+              properties:
+                exportId: { type: string, pattern: '^[a-fA-F0-9]{24}$' }
+                caption: { type: string, maxLength: 2200, default: '' }
+      responses:
+        '201':
+          description: Draft saved; it is not published
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InstagramPostDraftResponse' }
+        '400': { description: Invalid draft details }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { description: Project or saved export was not found }
+  /projects/{projectId}/instagram-posts/{postId}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - name: postId
+        in: path
+        required: true
+        schema: { type: string, pattern: '^[a-fA-F0-9]{24}$' }
+    patch:
+      operationId: updateInstagramPostDraft
+      tags: [Instagram]
+      summary: Update a draft and clear any previous approval
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expectedRevision, exportId, caption]
+              properties:
+                expectedRevision: { type: integer, minimum: 1 }
+                exportId: { type: string, pattern: '^[a-fA-F0-9]{24}$' }
+                caption: { type: string, maxLength: 2200 }
+      responses:
+        '200':
+          description: Updated draft; any prior approval is invalidated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InstagramPostDraftResponse' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { description: Revision conflict }
+  /projects/{projectId}/instagram-posts/{postId}/approve:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - name: postId
+        in: path
+        required: true
+        schema: { type: string, pattern: '^[a-fA-F0-9]{24}$' }
+    post:
+      operationId: approveInstagramPostDraft
+      tags: [Instagram]
+      summary: Approve the exact saved video and caption for a future publishing step
+      description: Approval never publishes content. Editing the draft clears its approval.
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200':
+          description: Approved snapshot recorded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InstagramPostDraftResponse' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { description: Instagram account is not connected or selected export is unavailable }
   /instagram/account:
     get:
       operationId: getInstagramAccount
@@ -1471,6 +1565,44 @@ components:
                       type: array
                       maxItems: 20
                       items: { type: string, minLength: 1 }
+    InstagramPostDraft:
+      type: object
+      additionalProperties: false
+      required: [id, projectId, exportId, fileName, caption, status, revision, approvedAt, updatedAt]
+      properties:
+        id: { type: string, pattern: '^[a-fA-F0-9]{24}$' }
+        projectId: { type: string, pattern: '^[a-fA-F0-9]{24}$' }
+        exportId: { type: string, pattern: '^[a-fA-F0-9]{24}$' }
+        fileName: { type: string, minLength: 1, maxLength: 255 }
+        caption: { type: string, maxLength: 2200 }
+        status: { type: string, enum: [draft, approved] }
+        revision: { type: integer, minimum: 1 }
+        approvedAt: { type: [string, 'null'], format: date-time }
+        updatedAt: { type: string, format: date-time }
+    InstagramPostDraftResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [item]
+          properties:
+            item: { $ref: '#/components/schemas/InstagramPostDraft' }
+    InstagramPostDraftsResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/InstagramPostDraft' }
     ApiErrorResponse:
       type: object
       additionalProperties: false

@@ -320,6 +320,23 @@ export const instagramAccountResponseSchema = z.object({
   data: z.object({ configured: z.boolean(), account: instagramAccountSchema.nullable() }).strict(),
 }).strict();
 export const instagramConnectResponseSchema = z.object({ data: z.object({ authorizationUrl: z.url() }).strict() }).strict();
+export const instagramPostDraftSchema = z.object({
+  id: z.string().regex(/^[a-f\d]{24}$/i),
+  projectId: z.string().regex(/^[a-f\d]{24}$/i),
+  exportId: z.string().regex(/^[a-f\d]{24}$/i),
+  fileName: z.string().min(1).max(255),
+  caption: z.string().max(2_200),
+  status: z.enum(["draft", "approved"]),
+  revision: z.number().int().positive(),
+  approvedAt: z.iso.datetime().nullable(),
+  updatedAt: z.iso.datetime(),
+}).strict();
+export type InstagramPostDraft = z.infer<typeof instagramPostDraftSchema>;
+export const instagramPostDraftsResponseSchema = z.object({ data: z.object({ items: z.array(instagramPostDraftSchema) }).strict() }).strict();
+export const instagramPostDraftResponseSchema = z.object({ data: z.object({ item: instagramPostDraftSchema }).strict() }).strict();
+export const createInstagramPostDraftRequestSchema = z.object({ exportId: z.string().regex(/^[a-f\d]{24}$/i), caption: z.string().max(2_200).default("") }).strict();
+export const updateInstagramPostDraftRequestSchema = z.object({ expectedRevision: z.number().int().positive(), exportId: z.string().regex(/^[a-f\d]{24}$/i), caption: z.string().max(2_200) }).strict();
+export const instagramPostDraftParamsSchema = z.object({ projectId: z.string().regex(/^[a-f\d]{24}$/i), postId: z.string().regex(/^[a-f\d]{24}$/i) }).strict();
 
 export const apiErrorResponseSchema = z.object({
   error: z.object({

@@ -35,7 +35,11 @@ Personal Instagram accounts are not supported by this API. Publishing, token ref
 - `POST /api/v1/instagram/oauth/start` — authenticated; creates state and returns the Meta authorization URL.
 - `GET /api/v1/instagram/oauth/callback` — one-time OAuth callback; redirects to the initiating trusted web origin.
 - `DELETE /api/v1/instagram/account` — authenticated removal of the locally stored connection.
+- `GET /api/v1/projects/:projectId/instagram-posts` — list the owner's saved post drafts.
+- `POST /api/v1/projects/:projectId/instagram-posts` — create a draft from a ready export owned by that project.
+- `PATCH /api/v1/projects/:projectId/instagram-posts/:postId` — revision-checked edit; changing the video or caption clears any approval.
+- `POST /api/v1/projects/:projectId/instagram-posts/:postId/approve` — explicitly approve the current video/caption snapshot when a professional account is connected. This records review only; it does not publish.
 
 ## Remaining verification
 
-Configure the Meta app and professional test account, then verify successful OAuth, user denial, expired/replayed state rejection, encrypted persistence, reconnect replacement, and local disconnect. Do not publish content until the separate review-and-approval workflow is implemented.
+Configure the Meta app and professional test account, then verify successful OAuth, user denial, expired/replayed state rejection, encrypted persistence, reconnect replacement, and local disconnect. Verify draft create/edit/reload, stale revision rejection, account-gated approval and approval invalidation. Publishing remains a separate feature and no post is sent by this workflow.

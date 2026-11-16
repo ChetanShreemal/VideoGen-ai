@@ -510,6 +510,18 @@ h1 { margin: 0; font-size: clamp(34px, 4vw, 46px); font-weight: 600; letter-spac
 .generation-start-button { display: inline-flex; width: auto !important; min-height: 40px; align-items: center; gap: 7px; justify-self: start; padding: 0 14px; }
 .generation-start-button .material-symbols-outlined { font-size: 18px; }
 .generation-locked-note { margin: 0; color: var(--muted); font-size: 11px; }
+.local-render-panel { gap: 14px; }
+.local-render-panel .detail-copy { max-width: 760px; }
+.local-render-format { max-width: 390px; }
+.local-render-note { margin: 0; color: var(--muted); font-size: 11px; }
+.local-render-privacy { max-width: 760px; margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.local-render-panel > .primary-button, .local-render-result > .primary-button { width: auto; justify-self: start; }
+.local-render-progress { display: grid; gap: 12px; }
+.local-render-progress > div:first-child { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
+.local-render-progress strong { color: var(--accent); }
+.local-render-progress .quiet-button { justify-self: start; }
+.local-render-result { display: grid; justify-items: start; gap: 12px; }
+.local-render-result video { width: min(100%, 860px); max-height: 70vh; background: #08090a; }
 
 /* Stitch authentication screens use a single centered credential card. */
 .auth-page { min-height: 100vh; padding: 0; background: radial-gradient(ellipse at 50% 42%, rgba(242,140,40,.055), transparent 43%), var(--page); }

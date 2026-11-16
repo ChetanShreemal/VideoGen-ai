@@ -18,6 +18,7 @@ import { apiBaseURL, authClient } from "@/lib/auth-client";
 import { WorkspaceShell } from "../../workspace-shell";
 import { ReferenceAssetsPanel } from "./reference-assets-panel";
 import { NarrationAssetsPanel } from "./narration-assets-panel";
+import { LocalRenderPanel } from "./local-render-panel";
 
 export default function ProjectDetailsPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -371,6 +372,7 @@ export default function ProjectDetailsPage() {
           {latestStoryboard?.status === "approved" && project.status === "active" ? <button className="primary-button generation-start-button" disabled={generationCreating || working} onClick={() => void startGeneration()} type="button"><span className="material-symbols-outlined" aria-hidden="true">play_arrow</span>{generationCreating ? "Starting simulation…" : "Run simulated generation"}</button> : <p className="generation-locked-note">{project.status !== "active" ? "Restore this project before starting a generation run." : latestStoryboard ? "Approve the storyboard above before starting a generation run." : "Save and approve a storyboard before starting a generation run."}</p>}
           {generationError && <p className="form-feedback error" role="alert">{generationError}</p>}
         </section>
+        <LocalRenderPanel key={`${projectId}:${latestStoryboard?.id ?? "none"}:${latestStoryboard?.version ?? 0}`} projectId={projectId} projectTitle={project.title} active={project.status === "active"} storyboard={latestStoryboard ?? undefined} />
         <div className="detail-actions">{project.status === "active" ? <button className="quiet-button" disabled={working} onClick={() => void changeStatus("archive")}>Archive project</button> : <button className="quiet-button" disabled={working} onClick={() => void changeStatus("restore")}>Restore project</button>}<span>Revision {project.revision}</span></div>
       </>}
     </section><footer className="workspace-footer"><span>© 2026 VideoGen</span><span>Ideas into stories.</span></footer>

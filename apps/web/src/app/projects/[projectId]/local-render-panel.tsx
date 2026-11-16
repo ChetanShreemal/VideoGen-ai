@@ -34,6 +34,9 @@ interface LocalRenderPanelProps {
   active: boolean;
   storyboard?: StoryboardResponse;
   mediaRevision: number;
+  narrationVolume: number;
+  musicVolume: number;
+  musicEnabled: boolean;
   onExportSaved: () => void;
 }
 
@@ -79,7 +82,7 @@ function SceneCard({ projectTitle, number, total, title, description, caption, h
   </AbsoluteFill>;
 }
 
-function StoryboardComposition({ projectTitle, storyboard, referenceImageUrl, narrationUrl }: { projectTitle: string; storyboard: StoryboardResponse["content"]; referenceImageUrl?: string; narrationUrl?: string }) {
+function StoryboardComposition({ projectTitle, storyboard, referenceImageUrl, narrationUrl, narrationVolume, musicUrl, musicVolume, musicEnabled }: { projectTitle: string; storyboard: StoryboardResponse["content"]; referenceImageUrl?: string; narrationUrl?: string; narrationVolume: number; musicUrl?: string; musicVolume: number; musicEnabled: boolean }) {
   let from = 0;
   const sceneSequences = storyboard.scenes.map((scene, index) => {
     const durationInFrames = Math.max(1, Math.round(scene.durationSeconds * fps));
@@ -92,10 +95,13 @@ function StoryboardComposition({ projectTitle, storyboard, referenceImageUrl, na
   const closingFrames = storyboard.closing ? 3 * fps : 0;
   if (closingFrames) sceneSequences.push(<Sequence key="closing" from={from} durationInFrames={closingFrames}><ClosingCard projectTitle={projectTitle} closing={storyboard.closing} /></Sequence>);
 
-  return <AbsoluteFill style={{ backgroundColor: "#101316" }}>{sceneSequences}{narrationUrl && <Audio src={narrationUrl} volume={0.9} />}</AbsoluteFill>;
+  return <AbsoluteFill style={{ backgroundColor: "#101316" }}>{sceneSequences}{narrationUrl && <Audio src={narrationUrl} volume={narrationVolume} />}{musicEnabled && musicUrl && <Audio src={musicUrl} volume={musicVolume} loop />}</AbsoluteFill>;
 }
 
-export function LocalRenderPanel({ projectId, projectTitle, active, storyboard, mediaRevision, onExportSaved }: LocalRenderPanelProps) {
+const maxLocalMusicBytes = 50 * 1024 * 1024;
+const supportedMusicExtensions = /\.(mp3|wav|m4a|aac|ogg|opus|webm)$/i;
+
+export function LocalRenderPanel({ projectId, projectTitle, active, storyboard, mediaRevision, narrationVolume, musicVolume, musicEnabled, onExportSaved }: LocalRenderPanelProps) {
   const [format, setFormat] = useState<Format>("landscape");
   const [progress, setProgress] = useState<number | null>(null);
   const [videoUrl, setVideoUrl] = useState("");
@@ -108,12 +114,25 @@ export function LocalRenderPanel({ projectId, projectTitle, active, storyboard, 
   const [narrationAssets, setNarrationAssets] = useState<ProjectNarrationAsset[]>([]);
   const [referenceImageId, setReferenceImageId] = useState("");
   const [narrationAssetId, setNarrationAssetId] = useState("");
+  const [musicFile, setMusicFile] = useState<File | null>(null);
+  const [musicPreviewUrl, setMusicPreviewUrl] = useState("");
+  const [musicError, setMusicError] = useState("");
   const [referencePreviewUrl, setReferencePreviewUrl] = useState("");
   const [referencePreviewError, setReferencePreviewError] = useState("");
   const [mediaLoading, setMediaLoading] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
   const durationSeconds = useMemo(() => storyboard ? storyboard.content.scenes.reduce((sum, scene) => sum + scene.durationSeconds, 0) + (storyboard.content.closing ? 3 : 0) : 0, [storyboard]);
   const renderable = Boolean(storyboard && storyboard.status === "approved" && active && durationSeconds > 0 && durationSeconds <= maxDurationSeconds);
+
+  useEffect(() => {
+    if (!musicFile) {
+      setMusicPreviewUrl("");
+      return;
+    }
+    const url = URL.createObjectURL(musicFile);
+    setMusicPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [musicFile]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -200,6 +219,8 @@ export function LocalRenderPanel({ projectId, projectTitle, active, storyboard, 
       ]);
       if (controller.signal.aborted) return;
       const { width, height } = dimensions[format];
+      const selectedMusicUrl = musicEnabled ? musicPreviewUrl || undefined : undefined;
+      const renderProps = { projectTitle, storyboard: storyboard.content, referenceImageUrl, narrationUrl, narrationVolume: narrationVolume / 100, musicUrl: selectedMusicUrl, musicVolume: musicVolume / 100, musicEnabled };
       const result = await renderMediaOnWeb({
         composition: {
           id: `storyboard-${storyboard.id}-${format}`,
@@ -209,9 +230,9 @@ export function LocalRenderPanel({ projectId, projectTitle, active, storyboard, 
           fps,
           durationInFrames: Math.round(durationSeconds * fps),
           calculateMetadata: null,
-          defaultProps: { projectTitle, storyboard: storyboard.content, referenceImageUrl, narrationUrl },
+          defaultProps: renderProps,
         },
-        inputProps: { projectTitle, storyboard: storyboard.content, referenceImageUrl, narrationUrl },
+        inputProps: renderProps,
         container: "mp4",
         videoCodec: "h264",
         licenseKey: "free-license",
@@ -267,9 +288,21 @@ export function LocalRenderPanel({ projectId, projectTitle, active, storyboard, 
       <label className="field"><span>Reference image <small>(optional)</small></span><select value={referenceImageId} disabled={mediaLoading || progress !== null} onChange={(event) => setReferenceImageId(event.target.value)}><option value="">No reference image</option>{referenceImages.map((asset) => <option value={asset.id} key={asset.id}>{asset.fileName}</option>)}</select></label>
       {referenceImageId && <div className="local-render-reference-preview" aria-live="polite">{referencePreviewUrl ? <img src={referencePreviewUrl} alt={`Selected reference image: ${referenceImages.find((asset) => asset.id === referenceImageId)?.fileName ?? "project image"}`} referrerPolicy="no-referrer" /> : referencePreviewError ? <small className="form-feedback error" role="alert">{referencePreviewError}</small> : <small className="detail-copy">Loading selected reference image…</small>}<small className="detail-copy">This image will appear as a subtle backdrop on each scene.</small></div>}
       <label className="field"><span>Saved narration <small>(optional)</small></span><select value={narrationAssetId} disabled={mediaLoading || progress !== null} onChange={(event) => setNarrationAssetId(event.target.value)}><option value="">No narration · silent video</option>{narrationAssets.map((asset) => <option value={asset.id} key={asset.id}>v{asset.storyboardVersion} · {asset.voiceName}</option>)}</select></label>
+      <label className="field local-render-music-field"><span>Background music <small>(optional · up to 50 MB)</small></span><input type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.opus,.webm" disabled={progress !== null} onChange={(event) => {
+        const file = event.currentTarget.files?.[0] ?? null;
+        event.currentTarget.value = "";
+        setMusicError("");
+        if (!file) return;
+        if (!supportedMusicExtensions.test(file.name) && !file.type.startsWith("audio/")) { setMusicError("Choose an MP3, WAV, M4A, AAC, OGG, OPUS or WebM audio file."); return; }
+        if (file.size === 0 || file.size > maxLocalMusicBytes) { setMusicError("Choose an audio file larger than 0 bytes and no larger than 50 MB."); return; }
+        setMusicFile(file);
+      }} /></label>
+      {musicFile && musicPreviewUrl && <div className="local-render-music-preview"><div><strong>{musicFile.name}</strong><button type="button" className="quiet-button" disabled={progress !== null} onClick={() => setMusicFile(null)}>Remove</button></div><audio controls preload="metadata" src={musicPreviewUrl} aria-label="Preview selected background music" />{!musicEnabled && <small className="detail-copy">Enable “Include background music” in Voice &amp; audio settings to add this track to the render.</small>}</div>}
+      {musicError && <small className="form-feedback error" role="alert">{musicError}</small>}
       {mediaLoading && <small className="detail-copy">Loading this project’s saved media…</small>}
       {!mediaLoading && narrationAssets.length === 0 && <small className="detail-copy">No saved narration for this storyboard version. Generate and save a narration preview above to include audio.</small>}
-      <small className="detail-copy">The image is used as a subtle backdrop on each scene. Saved narration plays from the start and is clipped to the video duration.</small>
+      {musicEnabled && !musicFile && <small className="detail-copy">Background music is enabled in this project, but no track is selected. Choose a file here or turn music off in Voice &amp; audio settings.</small>}
+      <small className="detail-copy">The image is a subtle scene backdrop. Narration starts at the beginning; background music loops and both tracks use the saved project volumes. Music is selected from this device and used only for this render.</small>
     </div>
     <p className="local-render-privacy">Remotion receives your IP address, this site’s domain and the render outcome for license accounting. It does not receive storyboard or media content.</p>
     {!storyboard && <p className="generation-locked-note">Save and approve a storyboard to enable local video composition.</p>}

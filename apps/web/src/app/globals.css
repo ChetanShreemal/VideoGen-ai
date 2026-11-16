@@ -460,6 +460,11 @@ h1 { margin: 0; font-size: clamp(34px, 4vw, 46px); font-weight: 600; letter-spac
 .generation-mode-note { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid rgba(242,140,40,.32); background: rgba(242,140,40,.07); color: var(--muted); font-size: 11px; line-height: 1.6; }
 .generation-mode-note > .material-symbols-outlined { flex: 0 0 auto; color: var(--accent); font-size: 18px; }
 .generation-mode-note strong { color: var(--text); }
+.generation-next-step { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px 20px; border: 1px solid rgba(242,140,40,.52); background: linear-gradient(105deg, rgba(242,140,40,.12), rgba(20,22,24,.92) 65%); }
+.generation-next-step .eyebrow { margin: 0 0 6px; color: #ffb77d; }
+.generation-next-step h2 { margin: 0; color: var(--text); font-size: 17px; }
+.generation-next-step p { margin: 5px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.generation-next-step .primary-button { display: inline-flex; width: auto; min-height: 40px; flex: 0 0 auto; align-items: center; gap: 8px; padding-inline: 14px; }
 .generation-error { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .generation-error .quiet-button { min-height: 32px; flex: 0 0 auto; }
 .generation-summary-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
@@ -530,6 +535,7 @@ h1 { margin: 0; font-size: clamp(34px, 4vw, 46px); font-weight: 600; letter-spac
 .generation-start-button .material-symbols-outlined { font-size: 18px; }
 .generation-locked-note { margin: 0; color: var(--muted); font-size: 11px; }
 .local-render-panel { gap: 14px; }
+#local-render-title { scroll-margin-top: 86px; }
 .local-render-panel .detail-copy { max-width: 760px; }
 .local-render-format { max-width: 390px; }
 .local-render-media-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; max-width: 780px; }
@@ -661,6 +667,8 @@ h1 { margin: 0; font-size: clamp(34px, 4vw, 46px); font-weight: 600; letter-spac
   .reference-upload-box { align-items: flex-start; flex-direction: column; }
   .reference-assets-grid { grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); }
   .generation-heading { align-items: flex-start; flex-direction: column; }
+  .generation-next-step { align-items: flex-start; flex-direction: column; }
+  .generation-next-step .primary-button { width: 100%; justify-content: center; }
   .generation-stepper { gap: 4px; padding: 8px; }
   .generation-stepper > span:not(.step-divider), .generation-stepper > a { gap: 6px; padding-inline: 7px; font-size: 9px; }
   .generation-stepper .step-divider { width: 8px; }

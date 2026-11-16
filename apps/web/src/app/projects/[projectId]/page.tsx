@@ -119,6 +119,16 @@ export default function ProjectDetailsPage() {
     return () => { current = false; };
   }, [projectId, session, sessionPending]);
 
+  useEffect(() => {
+    if (loading || !project) return;
+    const anchor = window.location.hash.slice(1);
+    if (!anchor) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(decodeURIComponent(anchor))?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [loading, project, projectId]);
+
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");

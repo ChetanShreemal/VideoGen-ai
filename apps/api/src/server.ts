@@ -15,6 +15,7 @@ import { registerProjectRoutes } from "./projects/project-routes.js";
 import { ProjectRepository } from "./projects/project-repository.js";
 import { StoryboardRepository } from "./projects/storyboard-repository.js";
 import { registerAssetRoutes } from "./assets/asset-routes.js";
+import { registerExportRoutes } from "./assets/export-routes.js";
 import { registerGenerationRoutes } from "./generations/generation-routes.js";
 import { registerVoiceRoutes } from "./voice/voice-routes.js";
 import { registerNarrationAssetRoutes } from "./voice/narration-asset-routes.js";
@@ -49,6 +50,7 @@ await app.register(fastifyCors, {
 
 await registerProjectRoutes(app, auth, projectRepository, storyboardRepository);
 await registerAssetRoutes(app, auth, database, projectRepository);
+await registerExportRoutes(app, auth, database, projectRepository);
 await registerGenerationRoutes(app, auth, database, projectRepository, storyboardRepository);
 await registerVoiceRoutes(app, auth, database, projectRepository, storyboardRepository);
 await registerNarrationAssetRoutes(app, auth, database, projectRepository, storyboardRepository);

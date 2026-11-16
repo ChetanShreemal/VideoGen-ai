@@ -12,9 +12,9 @@ import {
 } from "@videogen/contracts";
 import { apiBaseURL } from "@/lib/auth-client";
 
-type Props = { projectId: string; active: boolean };
+type Props = { projectId: string; active: boolean; onMediaChanged?: () => void };
 
-export function ReferenceAssetsPanel({ projectId, active }: Props) {
+export function ReferenceAssetsPanel({ projectId, active, onMediaChanged }: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [assets, setAssets] = useState<ProjectAsset[]>([]);
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
@@ -85,6 +85,7 @@ export function ReferenceAssetsPanel({ projectId, active }: Props) {
           }
           const result = assetCompletionResponseSchema.parse(await completeResponse.json());
           setAssets((current) => [result.data.asset, ...current.filter((item) => item.id !== result.data.asset.id)]);
+          onMediaChanged?.();
           uploaded += 1;
         } catch (cause) {
           await fetch(`${apiBaseURL}/projects/${projectId}/assets/${intent.data.assetId}`, { method: "DELETE", credentials: "include" }).catch(() => undefined);
@@ -108,6 +109,7 @@ export function ReferenceAssetsPanel({ projectId, active }: Props) {
       if (!response.ok) throw new Error("Removal is still in progress. Try again shortly.");
       setAssets((current) => current.filter((item) => item.id !== asset.id));
       setPreviewUrls((current) => { const next = { ...current }; delete next[asset.id]; return next; });
+      onMediaChanged?.();
       setMessage("Reference removed.");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Reference could not be removed."); }
     finally { setWorking(false); }
@@ -116,7 +118,7 @@ export function ReferenceAssetsPanel({ projectId, active }: Props) {
   return <section className="detail-panel reference-assets-panel" aria-labelledby="reference-assets-title">
     <div className="reference-assets-heading"><div><p className="eyebrow">SOURCE MATERIAL · STEP 1</p><h2 id="reference-assets-title">Reference media</h2><p className="detail-copy">Add images or short clips to guide your storyboard. Files stay private to your account.</p></div><span className="reference-count">{assets.length} / 20</span></div>
     {error && <p className="form-feedback error" role="alert">{error}</p>}{message && <p className="form-feedback info" role="status">{message}</p>}
-    {active && <div className="reference-upload-box"><input ref={fileInput} className="reference-file-input" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" multiple disabled={working || assets.length >= 20} onChange={(event) => void uploadFiles(event.currentTarget.files)} aria-label="Choose reference images or videos" /><button type="button" className="quiet-button" disabled={working || assets.length >= 20} onClick={() => fileInput.current?.click()}><span className="material-symbols-outlined" aria-hidden="true">upload</span>{working ? "Uploading…" : "Add reference media"}</button><span className="reference-limits">JPEG, PNG, WebP up to 20 MB · MP4, MOV up to 100 MB / 30 sec</span><label className="reference-rights"><input type="checkbox" checked={rightsConfirmed} disabled={working} onChange={(event) => setRightsConfirmed(event.target.checked)} /><span>I have permission to use these files as video references.</span></label></div>}
+    {active && <div className="reference-upload-box"><input ref={fileInput} className="reference-file-input" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" multiple disabled={working || assets.length >= 20} onChange={(event) => void uploadFiles(event.currentTarget.files)} aria-label="Choose reference images or videos" /><button type="button" className="quiet-button" disabled={working || assets.length >= 20} onClick={() => fileInput.current?.click()}><span className="material-symbols-outlined" aria-hidden="true">upload</span>{working ? "Uploading…" : "Add reference media"}</button><span className="reference-limits">JPEG, PNG, WebP up to 20 MB and 40 MP · MP4, MOV up to 100 MB / 30 sec at 1920 × 1080</span><label className="reference-rights"><input type="checkbox" checked={rightsConfirmed} disabled={working} onChange={(event) => setRightsConfirmed(event.target.checked)} /><span>I have permission to use these files as video references.</span></label></div>}
     {loading ? <p className="detail-copy">Loading reference media…</p> : assets.length === 0 ? <p className="reference-empty">No reference media yet. Add a file to guide the creative plan.</p> : <div className="reference-assets-grid">{assets.map((asset) => <article className="reference-asset-card" key={asset.id}>
       <div className="reference-preview">{previewUrls[asset.id] ? asset.contentType.startsWith("image/") ? <img src={previewUrls[asset.id]} alt={asset.fileName} referrerPolicy="no-referrer" /> : <video src={previewUrls[asset.id]} controls preload="metadata" aria-label={asset.fileName} /> : <span className="material-symbols-outlined" aria-hidden="true">{asset.contentType.startsWith("image/") ? "image" : "movie"}</span>}</div>
       <div className="reference-asset-copy"><strong title={asset.fileName}>{asset.fileName}</strong><small>{asset.media.type === "video" ? `${asset.media.width} × ${asset.media.height} · ${Math.round(asset.media.durationSeconds)} sec` : `${asset.media.width} × ${asset.media.height}`} · {(asset.sizeBytes / (1024 * 1024)).toFixed(1)} MB</small></div>

@@ -516,6 +516,9 @@ h1 { margin: 0; font-size: clamp(34px, 4vw, 46px); font-weight: 600; letter-spac
 .local-render-media-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; max-width: 780px; }
 .local-render-media-options > .detail-copy { grid-column: 1 / -1; margin: 0; }
 .local-render-media-options label small { color: var(--muted); font-weight: 400; }
+.local-render-reference-preview { display: grid; justify-items: start; gap: 6px; grid-column: 1 / -1; }
+.local-render-reference-preview img { display: block; width: min(100%, 360px); max-height: 220px; aspect-ratio: 16 / 9; object-fit: cover; border: 1px solid var(--border); border-radius: 10px; background: #101316; }
+.local-render-reference-preview .form-feedback { margin: 0; }
 .local-render-note { margin: 0; color: var(--muted); font-size: 11px; }
 .local-render-privacy { max-width: 760px; margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
 .local-render-panel > .primary-button, .local-render-result > .primary-button { width: auto; justify-self: start; }
@@ -525,7 +528,16 @@ h1 { margin: 0; font-size: clamp(34px, 4vw, 46px); font-weight: 600; letter-spac
 .local-render-progress .quiet-button { justify-self: start; }
 .local-render-result { display: grid; justify-items: start; gap: 12px; }
 .local-render-result video { width: min(100%, 860px); max-height: 70vh; background: #08090a; }
+.local-render-result-actions, .project-export-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.project-exports-panel { gap: 14px; }
+.project-exports-list { display: grid; gap: 10px; }
+.project-export-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.project-export-info { display: grid; min-width: 0; gap: 4px; }
+.project-export-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-export-info small { color: var(--muted); }
+.project-export-preview { grid-column: 1 / -1; width: min(100%, 860px); max-height: 70vh; background: #08090a; }
 @media (max-width: 640px) { .local-render-media-options { grid-template-columns: 1fr; } .local-render-media-options > .detail-copy { grid-column: auto; } }
+@media (max-width: 640px) { .project-export-item { grid-template-columns: 1fr; } }
 
 /* Stitch authentication screens use a single centered credential card. */
 .auth-page { min-height: 100vh; padding: 0; background: radial-gradient(ellipse at 50% 42%, rgba(242,140,40,.055), transparent 43%), var(--page); }

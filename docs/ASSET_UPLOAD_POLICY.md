@@ -8,7 +8,7 @@ This policy covers user-supplied image and video references attached to a projec
 
 | Type | Accepted formats | Per-file limit | Media limit |
 |---|---|---:|---|
-| Image | JPEG, PNG, WebP | 20 MiB | Decode and verify image dimensions; reject malformed or unsupported content |
+| Image | JPEG, PNG, WebP | 20 MiB | Up to 8,000 × 8,000 px and 40 megapixels; decode and verify dimensions, and reject malformed or unsupported content |
 | Video | MP4, QuickTime MOV | 100 MiB | Up to 30 seconds and 1920×1080; inspect the actual container/codecs and dimensions server-side |
 
 Reject SVG, GIF, HEIC/HEIF, and unknown types for the initial slice. The browser's MIME type and file name are hints only; the API must verify object length, signature/content, and media metadata before marking an asset ready. Require the uploader to confirm they have the rights and consent needed to use the reference.

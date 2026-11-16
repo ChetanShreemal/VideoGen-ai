@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@remotion/media": "4.0.543",
     "@remotion/web-renderer": "4.0.543",
     "@videogen/contracts": "0.1.0",
     "better-auth": "^1.7.15",

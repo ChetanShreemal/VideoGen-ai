@@ -2,10 +2,15 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { renderMediaOnWeb } from "@remotion/web-renderer";
-import { AbsoluteFill, Audio, Img, Sequence, interpolate, useCurrentFrame } from "remotion";
+import { Audio } from "@remotion/media";
+import { AbsoluteFill, Img, Sequence, interpolate, useCurrentFrame } from "remotion";
 import {
   assetPreviewResponseSchema,
   projectAssetsResponseSchema,
+  projectExportPolicy,
+  projectExportResponseSchema,
+  projectExportUploadIntentResponseSchema,
+  projectExportUploadRequestSchema,
   projectNarrationAssetsResponseSchema,
   type ProjectAsset,
   type ProjectNarrationAsset,
@@ -28,6 +33,8 @@ interface LocalRenderPanelProps {
   projectTitle: string;
   active: boolean;
   storyboard?: StoryboardResponse;
+  mediaRevision: number;
+  onExportSaved: () => void;
 }
 
 interface SceneCardProps {
@@ -85,18 +92,24 @@ function StoryboardComposition({ projectTitle, storyboard, referenceImageUrl, na
   const closingFrames = storyboard.closing ? 3 * fps : 0;
   if (closingFrames) sceneSequences.push(<Sequence key="closing" from={from} durationInFrames={closingFrames}><ClosingCard projectTitle={projectTitle} closing={storyboard.closing} /></Sequence>);
 
-  return <AbsoluteFill style={{ backgroundColor: "#101316" }}>{sceneSequences}{narrationUrl && <Audio src={narrationUrl} volume={0.9} crossOrigin="anonymous" />}</AbsoluteFill>;
+  return <AbsoluteFill style={{ backgroundColor: "#101316" }}>{sceneSequences}{narrationUrl && <Audio src={narrationUrl} volume={0.9} />}</AbsoluteFill>;
 }
 
-export function LocalRenderPanel({ projectId, projectTitle, active, storyboard }: LocalRenderPanelProps) {
+export function LocalRenderPanel({ projectId, projectTitle, active, storyboard, mediaRevision, onExportSaved }: LocalRenderPanelProps) {
   const [format, setFormat] = useState<Format>("landscape");
   const [progress, setProgress] = useState<number | null>(null);
   const [videoUrl, setVideoUrl] = useState("");
+  const [videoBlob, setVideoBlob] = useState<Blob | null>(null);
+  const [savingExport, setSavingExport] = useState(false);
+  const [exportSaved, setExportSaved] = useState(false);
+  const [exportMessage, setExportMessage] = useState("");
   const [error, setError] = useState("");
   const [referenceImages, setReferenceImages] = useState<ProjectAsset[]>([]);
   const [narrationAssets, setNarrationAssets] = useState<ProjectNarrationAsset[]>([]);
   const [referenceImageId, setReferenceImageId] = useState("");
   const [narrationAssetId, setNarrationAssetId] = useState("");
+  const [referencePreviewUrl, setReferencePreviewUrl] = useState("");
+  const [referencePreviewError, setReferencePreviewError] = useState("");
   const [mediaLoading, setMediaLoading] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
   const durationSeconds = useMemo(() => storyboard ? storyboard.content.scenes.reduce((sum, scene) => sum + scene.durationSeconds, 0) + (storyboard.content.closing ? 3 : 0) : 0, [storyboard]);
@@ -128,7 +141,30 @@ export function LocalRenderPanel({ projectId, projectTitle, active, storyboard }
       if (!controller.signal.aborted) setError("Saved media could not be loaded. You can still render without it.");
     }).finally(() => { if (!controller.signal.aborted) setMediaLoading(false); });
     return () => controller.abort();
-  }, [projectId, storyboard?.version]);
+  }, [projectId, storyboard?.version, mediaRevision]);
+
+  useEffect(() => {
+    const selectedImage = referenceImages.find((asset) => asset.id === referenceImageId);
+    if (!selectedImage) {
+      setReferencePreviewUrl("");
+      setReferencePreviewError("");
+      return;
+    }
+    const controller = new AbortController();
+    setReferencePreviewUrl("");
+    setReferencePreviewError("");
+    void fetch(`${apiBaseURL}/projects/${projectId}/assets/${selectedImage.id}/preview`, {
+      credentials: "include", cache: "no-store", signal: controller.signal,
+    }).then(async (response) => {
+      if (!response.ok) throw new Error("Preview unavailable");
+      return assetPreviewResponseSchema.parse(await response.json()).data.url;
+    }).then((url) => {
+      if (!controller.signal.aborted) setReferencePreviewUrl(url);
+    }).catch(() => {
+      if (!controller.signal.aborted) setReferencePreviewError("The selected reference image preview could not be loaded.");
+    });
+    return () => controller.abort();
+  }, [projectId, referenceImages, referenceImageId]);
 
   useEffect(() => () => {
     abortRef.current?.abort();
@@ -146,6 +182,9 @@ export function LocalRenderPanel({ projectId, projectTitle, active, storyboard }
     abortRef.current = controller;
     if (videoUrl) URL.revokeObjectURL(videoUrl);
     setVideoUrl("");
+    setVideoBlob(null);
+    setExportSaved(false);
+    setExportMessage("");
     setError("");
     setProgress(0);
     try {
@@ -183,6 +222,7 @@ export function LocalRenderPanel({ projectId, projectTitle, active, storyboard }
       if (controller.signal.aborted) return;
       const blob = await result.getBlob();
       if (blob.size === 0) throw new Error("The local render returned an empty file.");
+      setVideoBlob(blob);
       setVideoUrl(URL.createObjectURL(blob));
       setProgress(100);
     } catch (cause) {
@@ -193,6 +233,31 @@ export function LocalRenderPanel({ projectId, projectTitle, active, storyboard }
     }
   }
 
+  async function saveExport() {
+    if (!videoBlob || savingExport || exportSaved) return;
+    setSavingExport(true);
+    setExportMessage("");
+    try {
+      const fileName = `videogen-${projectId.slice(-6)}-${format}.mp4`;
+      const uploadRequest = projectExportUploadRequestSchema.parse({ fileName, contentType: "video/mp4", sizeBytes: videoBlob.size });
+      const intentResponse = await fetch(`${apiBaseURL}/projects/${projectId}/export-upload-intents`, {
+        method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify(uploadRequest),
+      });
+      if (!intentResponse.ok) throw new Error(intentResponse.status === 413 ? "Project export storage limit has been reached." : "Saving the export could not be started.");
+      const intent = projectExportUploadIntentResponseSchema.parse(await intentResponse.json());
+      const uploadResponse = await fetch(intent.data.uploadUrl, { method: "PUT", headers: { "Content-Type": "video/mp4" }, body: videoBlob });
+      if (!uploadResponse.ok) throw new Error("Cloud storage rejected the export upload. Check the bucket CORS policy and retry.");
+      const completeResponse = await fetch(`${apiBaseURL}/projects/${projectId}/exports/${intent.data.exportId}/complete`, { method: "POST", credentials: "include" });
+      if (!completeResponse.ok) throw new Error("The uploaded export could not be verified. Try saving it again.");
+      projectExportResponseSchema.parse(await completeResponse.json());
+      setExportSaved(true);
+      setExportMessage("Export saved to this project.");
+      onExportSaved();
+    } catch (cause) {
+      setExportMessage(cause instanceof Error ? cause.message : "Export could not be saved. Try again.");
+    } finally { setSavingExport(false); }
+  }
+
   const fileName = `videogen-${projectId.slice(-6)}-${format}.mp4`;
   return <section className="detail-panel local-render-panel" aria-labelledby="local-render-title">
     <div><p className="eyebrow">LOCAL VIDEO · STEP 5</p><h2 id="local-render-title">Compose a storyboard video</h2><p className="detail-copy">Render animated scene cards from your approved titles, visual descriptions, hook, captions and closing. Optionally include a saved reference image and narration track. Processing and video content stay in this browser; this first version does not create AI footage.</p></div>
@@ -200,6 +265,7 @@ export function LocalRenderPanel({ projectId, projectTitle, active, storyboard }
     <p className="local-render-note">Up to {maxDurationSeconds} seconds · 30 fps · MP4/H.264 · keep this tab open while rendering</p>
     <div className="local-render-media-options">
       <label className="field"><span>Reference image <small>(optional)</small></span><select value={referenceImageId} disabled={mediaLoading || progress !== null} onChange={(event) => setReferenceImageId(event.target.value)}><option value="">No reference image</option>{referenceImages.map((asset) => <option value={asset.id} key={asset.id}>{asset.fileName}</option>)}</select></label>
+      {referenceImageId && <div className="local-render-reference-preview" aria-live="polite">{referencePreviewUrl ? <img src={referencePreviewUrl} alt={`Selected reference image: ${referenceImages.find((asset) => asset.id === referenceImageId)?.fileName ?? "project image"}`} referrerPolicy="no-referrer" /> : referencePreviewError ? <small className="form-feedback error" role="alert">{referencePreviewError}</small> : <small className="detail-copy">Loading selected reference image…</small>}<small className="detail-copy">This image will appear as a subtle backdrop on each scene.</small></div>}
       <label className="field"><span>Saved narration <small>(optional)</small></span><select value={narrationAssetId} disabled={mediaLoading || progress !== null} onChange={(event) => setNarrationAssetId(event.target.value)}><option value="">No narration · silent video</option>{narrationAssets.map((asset) => <option value={asset.id} key={asset.id}>v{asset.storyboardVersion} · {asset.voiceName}</option>)}</select></label>
       {mediaLoading && <small className="detail-copy">Loading this project’s saved media…</small>}
       {!mediaLoading && narrationAssets.length === 0 && <small className="detail-copy">No saved narration for this storyboard version. Generate and save a narration preview above to include audio.</small>}
@@ -211,6 +277,6 @@ export function LocalRenderPanel({ projectId, projectTitle, active, storyboard }
     {storyboard && durationSeconds > maxDurationSeconds && <p className="form-feedback error" role="alert">This storyboard is {durationSeconds} seconds. Shorten it to {maxDurationSeconds} seconds or less for the first local-render version.</p>}
     {error && <p className="form-feedback error" role="alert">{error}</p>}
     {progress !== null ? <div className="local-render-progress" role="status" aria-live="polite"><div><span>Rendering locally</span><strong>{progress}%</strong></div><div className="generation-progress-track" role="progressbar" aria-label="Local render progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}><span style={{ width: `${progress}%` }} /></div><button type="button" className="quiet-button" onClick={() => abortRef.current?.abort()}>Cancel render</button></div> : <button type="button" className="primary-button" disabled={!renderable} onClick={() => void renderLocally()}>Render MP4 locally<span aria-hidden="true">→</span></button>}
-    {videoUrl && <div className="local-render-result"><video src={videoUrl} controls playsInline preload="metadata" aria-label="Local storyboard video preview" /><a className="primary-button" href={videoUrl} download={fileName}>Download MP4<span aria-hidden="true">↓</span></a></div>}
+    {videoUrl && <div className="local-render-result"><video src={videoUrl} controls playsInline preload="metadata" aria-label="Local storyboard video preview" /><div className="local-render-result-actions"><a className="primary-button" href={videoUrl} download={fileName}>Download MP4<span aria-hidden="true">↓</span></a><button className="quiet-button" type="button" onClick={() => void saveExport()} disabled={savingExport || exportSaved || !videoBlob || videoBlob.size > projectExportPolicy.maxBytesPerExport}>{exportSaved ? "Saved to project" : savingExport ? "Saving export…" : "Save to project"}</button></div>{videoBlob && videoBlob.size > projectExportPolicy.maxBytesPerExport && <small className="form-feedback error">This export is larger than the {Math.round(projectExportPolicy.maxBytesPerExport / (1024 * 1024))} MB project storage upload limit.</small>}{exportMessage && <small className={exportSaved ? "form-feedback info" : "form-feedback error"} role={exportSaved ? "status" : "alert"}>{exportMessage}</small>}</div>}
   </section>;
 }

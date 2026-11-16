@@ -14,9 +14,10 @@ interface NarrationAssetsPanelProps {
   storyboardId?: string;
   audio: Blob | null;
   voiceName: string;
+  onMediaChanged?: () => void;
 }
 
-export function NarrationAssetsPanel({ projectId, active, storyboardId, audio, voiceName }: NarrationAssetsPanelProps) {
+export function NarrationAssetsPanel({ projectId, active, storyboardId, audio, voiceName, onMediaChanged }: NarrationAssetsPanelProps) {
   const [items, setItems] = useState<ProjectNarrationAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -60,6 +61,7 @@ export function NarrationAssetsPanel({ projectId, active, storyboardId, audio, v
         throw new Error(payload?.error?.message || "Narration could not be saved.");
       }
       await loadItems();
+      onMediaChanged?.();
       setMessage("Narration saved privately to this project.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Narration could not be saved.");
@@ -96,6 +98,7 @@ export function NarrationAssetsPanel({ projectId, active, storyboardId, audio, v
       }
       setItems((current) => current.filter((item) => item.id !== asset.id));
       setPreviewUrls((current) => { const next = { ...current }; delete next[asset.id]; return next; });
+      onMediaChanged?.();
       setMessage("Saved narration deleted.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Saved narration could not be deleted.");

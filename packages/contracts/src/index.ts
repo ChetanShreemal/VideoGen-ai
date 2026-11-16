@@ -60,6 +60,9 @@ export const assetUploadPolicy = {
   imageMimeTypes: ["image/jpeg", "image/png", "image/webp"] as const,
   videoMimeTypes: ["video/mp4", "video/quicktime"] as const,
   maxImageBytes: 20 * MiB,
+  maxImageWidth: 8000,
+  maxImageHeight: 8000,
+  maxImagePixels: 40_000_000,
   maxVideoBytes: 100 * MiB,
   maxVideoDurationSeconds: 30,
   maxVideoWidth: 1920,
@@ -111,6 +114,39 @@ export const assetUploadIntentResponseSchema = z.object({
 }).strict();
 export const assetCompletionResponseSchema = z.object({ data: z.object({ asset: projectAssetSchema }).strict() }).strict();
 export const assetPreviewResponseSchema = z.object({ data: z.object({ url: z.url(), expiresAt: z.iso.datetime() }).strict() }).strict();
+
+export const projectExportPolicy = {
+  maxBytesPerExport: 200 * MiB,
+  maxExportsPerProject: 50,
+  maxBytesPerUser: 5 * 1024 * MiB,
+  maxDurationSeconds: 120,
+  maxWidth: 1920,
+  maxHeight: 1920,
+  uploadUrlTtlSeconds: 10 * 60,
+  readUrlTtlSeconds: 5 * 60,
+  pendingCleanupMs: 10 * 60_000,
+} as const;
+export const projectExportUploadRequestSchema = z.object({
+  fileName: z.string().trim().min(1).max(255).refine((value) => !/[\\/\u0000-\u001f]/.test(value), "File name contains unsupported characters."),
+  contentType: z.literal("video/mp4"),
+  sizeBytes: z.number().int().positive().max(projectExportPolicy.maxBytesPerExport),
+}).strict();
+export const projectExportSchema = z.object({
+  id: z.string().regex(/^[a-f\d]{24}$/i),
+  fileName: z.string().min(1).max(255),
+  sizeBytes: z.number().int().positive(),
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+  durationSeconds: z.number().positive(),
+  createdAt: z.iso.datetime(),
+}).strict();
+export type ProjectExport = z.infer<typeof projectExportSchema>;
+export const projectExportsResponseSchema = z.object({ data: z.object({ items: z.array(projectExportSchema) }).strict() }).strict();
+export const projectExportUploadIntentResponseSchema = z.object({
+  data: z.object({ exportId: z.string().regex(/^[a-f\d]{24}$/i), uploadUrl: z.url(), expiresAt: z.iso.datetime() }).strict(),
+}).strict();
+export const projectExportResponseSchema = z.object({ data: z.object({ export: projectExportSchema }).strict() }).strict();
+export const projectExportFileResponseSchema = z.object({ data: z.object({ url: z.url(), expiresAt: z.iso.datetime() }).strict() }).strict();
 
 export const narrationVoiceNames = ["Kore", "Puck", "Charon", "Aoede", "Fenrir", "Zephyr"] as const;
 export const narrationAssetPolicy = {

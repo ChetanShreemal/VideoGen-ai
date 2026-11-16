@@ -63,9 +63,9 @@ async function inspectMedia(asset: AssetDocument, bytes: Buffer) {
     throw new Error("Uploaded content does not match its declared media type.");
   }
   if (asset.contentType.startsWith("image/")) {
-    const metadata = await sharp(bytes, { failOn: "error", limitInputPixels: 40_000_000 }).metadata();
-    if (!metadata.width || !metadata.height || metadata.width > assetUploadPolicy.maxVideoWidth || metadata.height > assetUploadPolicy.maxVideoHeight) {
-      throw new Error("Image dimensions exceed the supported limits.");
+    const metadata = await sharp(bytes, { failOn: "error", limitInputPixels: assetUploadPolicy.maxImagePixels }).metadata();
+    if (!metadata.width || !metadata.height || metadata.width > assetUploadPolicy.maxImageWidth || metadata.height > assetUploadPolicy.maxImageHeight || metadata.width * metadata.height > assetUploadPolicy.maxImagePixels) {
+      throw new Error(`Image dimensions exceed the supported limits (${assetUploadPolicy.maxImageWidth} × ${assetUploadPolicy.maxImageHeight} px and ${assetUploadPolicy.maxImagePixels / 1_000_000} megapixels).`);
     }
     return { type: "image" as const, width: metadata.width, height: metadata.height };
   }

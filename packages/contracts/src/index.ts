@@ -245,13 +245,13 @@ export const generationJobSchema = z.object({
   projectId: z.string().regex(/^[a-f\d]{24}$/i),
   storyboardId: z.string().regex(/^[a-f\d]{24}$/i),
   storyboardVersion: z.number().int().positive(),
-  provider: z.literal("mock"),
-  simulated: z.literal(true),
+  provider: z.string().min(1).max(80),
+  simulated: z.boolean(),
   status: generationJobStatusSchema,
   stage: generationJobStageSchema,
   progressPercent: z.number().int().min(0).max(100),
   scenes: z.array(generationSceneProgressSchema).min(1).max(50),
-  videoAssetId: z.null(),
+  videoAssetId: z.string().regex(/^[a-f\d]{24}$/i).nullable(),
   error: z.object({ code: z.string().min(1), message: z.string().min(1) }).strict().optional(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
@@ -265,8 +265,11 @@ export const createGenerationJobResponseSchema = z.object({
     jobId: z.string().regex(/^[a-f\d]{24}$/i),
     status: generationJobStatusSchema,
     statusUrl: z.string().min(1),
-    simulated: z.literal(true),
+    simulated: z.boolean(),
   }).strict(),
+}).strict();
+export const generationVideoPreviewResponseSchema = z.object({
+  data: z.object({ url: z.url(), downloadUrl: z.url(), fileName: z.string().min(1), expiresAt: z.iso.datetime() }).strict(),
 }).strict();
 
 export const apiErrorResponseSchema = z.object({

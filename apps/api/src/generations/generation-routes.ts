@@ -6,6 +6,7 @@ import {
   apiErrorResponseSchema,
   createGenerationJobRequestSchema,
   createGenerationJobResponseSchema,
+  generationVideoPreviewResponseSchema,
   generationJobEnvelopeSchema,
   generationJobSchema,
   projectIdParamsSchema,
@@ -14,6 +15,7 @@ import {
 import type { MongoDatabase } from "@videogen/database";
 import type { createAuth } from "../auth.js";
 import { config } from "../config.js";
+import { createReadUrl, deleteObject, storePrivateObject } from "../assets/r2-storage.js";
 import { ProjectRepository } from "../projects/project-repository.js";
 import { StoryboardRepository } from "../projects/storyboard-repository.js";
 
@@ -38,12 +40,17 @@ interface GenerationJobDocument extends Document {
   operation: "generation";
   idempotencyKey: string;
   requestFingerprint: string;
-  provider: "mock";
+  provider: string;
+  simulated: boolean;
   status: JobStatus;
   stage: JobStage;
   progressPercent: number;
   scenes: GenerationSceneDocument[];
   inputSnapshot: StoryboardContent;
+  videoAssetId?: ObjectId;
+  videoObjectKey?: string;
+  videoFileName?: string;
+  videoSizeBytes?: number;
   createdAt: Date;
   updatedAt: Date;
   startedAt?: Date;
@@ -79,19 +86,45 @@ function toResponse(job: GenerationJobDocument) {
     projectId: job.projectId.toHexString(),
     storyboardId: job.storyboardId.toHexString(),
     storyboardVersion: job.storyboardVersion,
-    provider: "mock",
-    simulated: true,
+    provider: job.provider,
+    simulated: job.simulated ?? job.provider === "mock",
     status: job.status,
     stage: job.stage,
     progressPercent: job.progressPercent,
     scenes: job.scenes,
-    videoAssetId: null,
+    videoAssetId: job.videoAssetId?.toHexString() ?? null,
     ...(job.error ? { error: job.error } : {}),
     createdAt: job.createdAt.toISOString(),
     updatedAt: job.updatedAt.toISOString(),
     ...(job.startedAt ? { startedAt: job.startedAt.toISOString() } : {}),
     ...(job.completedAt ? { completedAt: job.completedAt.toISOString() } : {}),
   });
+}
+
+/** Store a provider-produced MP4 privately and make completion/output metadata atomic. */
+async function persistGeneratedVideo(
+  jobs: Collection<GenerationJobDocument>,
+  job: Pick<GenerationJobDocument, "_id" | "ownerUserId" | "projectId">,
+  bytes: Buffer,
+): Promise<ObjectId> {
+  const maxBytes = 512 * 1024 * 1024;
+  const hasMp4Signature = bytes.length >= 12 && bytes.length <= maxBytes && bytes.toString("ascii", 4, 8) === "ftyp";
+  if (!hasMp4Signature) throw new Error("Provider output must have an MP4 container signature and be under 512 MiB.");
+  const videoAssetId = new ObjectId();
+  const objectKey = `generated-videos/${job.ownerUserId}/${job.projectId.toHexString()}/${job._id.toHexString()}/${videoAssetId.toHexString()}.mp4`;
+  await storePrivateObject(objectKey, bytes, "video/mp4");
+  try {
+    const completedAt = new Date();
+    const saved = await jobs.updateOne({ _id: job._id, ownerUserId: job.ownerUserId, status: "running" }, { $set: {
+      videoAssetId, videoObjectKey: objectKey, videoFileName: `videogen-${job._id.toHexString()}.mp4`, videoSizeBytes: bytes.length,
+      status: "completed", stage: "completed", progressPercent: 100, completedAt, updatedAt: completedAt,
+    } });
+    if (!saved.matchedCount) throw new Error("Generation job is no longer accepting output.");
+    return videoAssetId;
+  } catch (error) {
+    await deleteObject(objectKey).catch(() => undefined);
+    throw error;
+  }
 }
 
 function delay(duration: number): Promise<void> {
@@ -191,7 +224,7 @@ export async function registerGenerationRoutes(
       jobId: job._id.toHexString(),
       status: job.status,
       statusUrl: `/api/v1/jobs/${job._id.toHexString()}`,
-      simulated: true,
+      simulated: job.simulated ?? job.provider === "mock",
     } }),
   );
 
@@ -232,6 +265,7 @@ export async function registerGenerationRoutes(
         storyboardVersion: storyboard.version,
         operation: "generation", idempotencyKey, requestFingerprint,
         provider: "mock", status: "queued", stage: "queued", progressPercent: 0,
+        simulated: true,
         scenes: storyboard.content.scenes.map((scene) => ({ sceneId: scene.id, title: scene.title, status: "queued", progressPercent: 0 })),
         inputSnapshot: storyboard.content,
         createdAt: now, updatedAt: now,
@@ -266,6 +300,26 @@ export async function registerGenerationRoutes(
     } catch {
       request.log.error("Generation job retrieval failed.");
       return sendError(reply, 503, "GENERATION_UNAVAILABLE", "Generation status is temporarily unavailable.");
+    }
+  });
+
+  app.get("/api/v1/jobs/:jobId/video", async (request, reply) => {
+    const ownerUserId = await requireUser(request, reply, auth);
+    if (!ownerUserId) return;
+    const rawJobId = (request.params as { jobId?: string })?.jobId;
+    if (!/^[a-f\d]{24}$/i.test(rawJobId ?? "")) return sendError(reply, 400, "VALIDATION_ERROR", "Job ID is invalid.");
+    try {
+      await initializeJobs();
+      const job = await jobs.findOne({ _id: new ObjectId(rawJobId!), ownerUserId, status: "completed", videoAssetId: { $type: "objectId" }, videoObjectKey: { $type: "string" } });
+      if (!job?.videoObjectKey || !job.videoFileName) return sendError(reply, 404, "VIDEO_NOT_FOUND", "This generation run has no completed video output.");
+      const url = await createReadUrl(job.videoObjectKey);
+      const downloadUrl = await createReadUrl(job.videoObjectKey, { type: "attachment", fileName: job.videoFileName });
+      return reply.send(generationVideoPreviewResponseSchema.parse({ data: {
+        url, downloadUrl, fileName: job.videoFileName, expiresAt: new Date(Date.now() + 300 * 1000).toISOString(),
+      } }));
+    } catch {
+      request.log.error("Generated video preview URL creation failed.");
+      return sendError(reply, 503, "GENERATION_UNAVAILABLE", "Video preview is temporarily unavailable.");
     }
   });
 }

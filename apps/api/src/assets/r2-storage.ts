@@ -20,8 +20,11 @@ export async function createUploadUrl(key: string, contentType: string, contentL
   return getSignedUrl(configuredClient(), new PutObjectCommand({ Bucket: r2Bucket, Key: key, ContentType: contentType, ContentLength: contentLength }), { expiresIn: 600 });
 }
 
-export async function createReadUrl(key: string): Promise<string> {
-  return getSignedUrl(configuredClient(), new GetObjectCommand({ Bucket: r2Bucket, Key: key }), { expiresIn: 300 });
+export async function createReadUrl(key: string, disposition?: { type: "inline" | "attachment"; fileName: string }): Promise<string> {
+  const responseContentDisposition = disposition
+    ? `${disposition.type}; filename="${disposition.fileName.replace(/["\\\r\n]/g, "_")}"`
+    : undefined;
+  return getSignedUrl(configuredClient(), new GetObjectCommand({ Bucket: r2Bucket, Key: key, ResponseContentDisposition: responseContentDisposition }), { expiresIn: 300 });
 }
 
 export async function storePrivateObject(key: string, body: Buffer, contentType: string): Promise<void> {

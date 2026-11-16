@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { generationJobEnvelopeSchema, type GenerationJob } from "@videogen/contracts";
+import { generationJobEnvelopeSchema, generationVideoPreviewResponseSchema, type GenerationJob } from "@videogen/contracts";
 import { apiBaseURL, authClient } from "@/lib/auth-client";
 import { WorkspaceShell } from "../../../../workspace-shell";
 
@@ -11,8 +11,8 @@ const stageLabels: Record<GenerationJob["stage"], string> = {
   queued: "Waiting in queue",
   preparing: "Preparing scene plan",
   processing_scenes: "Processing scenes",
-  assembling: "Finishing simulation",
-  completed: "Simulation complete",
+  assembling: "Assembling output",
+  completed: "Generation complete",
   failed: "Simulation stopped",
 };
 
@@ -27,6 +27,7 @@ export default function GenerationProgressPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refresh, setRefresh] = useState(0);
+  const [videoPreview, setVideoPreview] = useState<{ url: string; downloadUrl: string; fileName: string } | null>(null);
 
   useEffect(() => {
     if (sessionPending) return;
@@ -72,6 +73,25 @@ export default function GenerationProgressPage() {
     };
   }, [jobId, projectId, refresh, session, sessionPending]);
 
+  useEffect(() => {
+    const assetId = job?.videoAssetId;
+    if (!assetId) {
+      setVideoPreview(null);
+      return;
+    }
+    const controller = new AbortController();
+    let current = true;
+    setVideoPreview(null);
+    void fetch(`${apiBaseURL}/jobs/${jobId}/video`, { credentials: "include", cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("The generated video preview is not ready.");
+        return generationVideoPreviewResponseSchema.parse(await response.json());
+      })
+      .then((result) => { if (current) setVideoPreview({ url: result.data.url, downloadUrl: result.data.downloadUrl, fileName: result.data.fileName }); })
+      .catch(() => { if (current) setVideoPreview(null); });
+    return () => { current = false; controller.abort(); };
+  }, [job?.videoAssetId, jobId]);
+
   const signOut = useCallback(async () => {
     const result = await authClient.signOut();
     if (!result.error) window.location.replace("/");
@@ -86,7 +106,7 @@ export default function GenerationProgressPage() {
     <main className="workspace-page">
       <section className="project-detail generation-page">
         <div className="generation-heading">
-          <div><p className="eyebrow">SCENE GENERATION · STEP 4</p><h1>{job?.status === "completed" ? "Generation simulation complete" : job?.status === "failed" ? "Generation run stopped" : "Video generation in progress"}</h1><p className="form-subtitle">{job ? `${completeCount} of ${job.scenes.length} scenes processed for project ${job.projectId.slice(-6).toUpperCase()}.` : "Connecting to the generation job…"}</p></div>
+          <div><p className="eyebrow">SCENE GENERATION · STEP 4</p><h1>{job?.status === "completed" ? job.simulated ? "Generation simulation complete" : "Video generation complete" : job?.status === "failed" ? "Generation run stopped" : "Video generation in progress"}</h1><p className="form-subtitle">{job ? `${completeCount} of ${job.scenes.length} scenes processed for project ${job.projectId.slice(-6).toUpperCase()}.` : "Connecting to the generation job…"}</p></div>
           {job && <span className={`generation-status ${job.status}`}><span aria-hidden="true" />{statusLabel(job.status)}</span>}
         </div>
 
@@ -97,7 +117,7 @@ export default function GenerationProgressPage() {
           <span className="upcoming"><span>04</span> Preview &amp; review</span>
         </nav>
 
-        <div className="generation-mode-note generation-disclosure"><span className="material-symbols-outlined" aria-hidden="true">info</span><span><strong>Development simulation only.</strong> The progress is persisted and real, but this run does not generate video files or create a preview asset.</span></div>
+        {job?.simulated && <div className="generation-mode-note generation-disclosure"><span className="material-symbols-outlined" aria-hidden="true">info</span><span><strong>Development simulation only.</strong> The progress is persisted and real, but this run does not generate video files or create a preview asset.</span></div>}
 
         {error && <div className="form-feedback error generation-error" role="alert"><span>{error}</span><button className="quiet-button" type="button" onClick={() => { setLoading(true); setRefresh((value) => value + 1); }}>Retry status check</button></div>}
         {loading && !job ? <div className="detail-panel generation-loading" role="status" aria-live="polite"><span className="material-symbols-outlined generation-loading-spinner" aria-hidden="true">progress_activity</span><div><strong>Loading your generation run</strong><p>Fetching the latest scene progress…</p></div></div> : job ? <>
@@ -122,13 +142,14 @@ export default function GenerationProgressPage() {
 
             <aside className="detail-panel generation-inspector" aria-label="Generation details">
               <div><p className="eyebrow">RUN INSPECTOR</p><h2>{job.status === "failed" ? "Run needs attention" : "Job details"}</h2></div>
-              <div className="generation-inspector-callout"><span className="material-symbols-outlined" aria-hidden="true">{job.status === "completed" ? "task_alt" : job.status === "failed" ? "error" : "info"}</span><div><strong>{stageLabels[job.stage]}</strong><p>{job.status === "completed" ? "The simulated scene steps finished. There is no video asset to preview or download." : job.status === "failed" ? (job.error?.message ?? "The simulation stopped before all scene steps completed.") : "Scene progress is updating automatically while this job is active."}</p></div></div>
-              <dl className="generation-metadata"><div><dt>Storyboard</dt><dd>Version {job.storyboardVersion}</dd></div><div><dt>Provider</dt><dd>Mock · simulation</dd></div><div><dt>Job ID</dt><dd className="generation-mono">{job.id.slice(-10).toUpperCase()}</dd></div><div><dt>Started</dt><dd>{job.startedAt ? new Date(job.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Queued"}</dd></div></dl>
+              <div className="generation-inspector-callout"><span className="material-symbols-outlined" aria-hidden="true">{job.status === "completed" ? "task_alt" : job.status === "failed" ? "error" : "info"}</span><div><strong>{stageLabels[job.stage]}</strong><p>{job.status === "completed" ? job.videoAssetId ? "Your generated video is ready to preview and download." : "The simulated scene steps finished. There is no video asset to preview or download." : job.status === "failed" ? (job.error?.message ?? "The generation run stopped before all scene steps completed.") : "Scene progress is updating automatically while this job is active."}</p></div></div>
+              <dl className="generation-metadata"><div><dt>Storyboard</dt><dd>Version {job.storyboardVersion}</dd></div><div><dt>Provider</dt><dd>{job.provider}{job.simulated ? " · simulation" : ""}</dd></div><div><dt>Job ID</dt><dd className="generation-mono">{job.id.slice(-10).toUpperCase()}</dd></div><div><dt>Started</dt><dd>{job.startedAt ? new Date(job.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Queued"}</dd></div></dl>
               <div className="generation-inspector-actions"><Link className="quiet-button" href={`/projects/${projectId}#storyboard`}>Review storyboard</Link><Link className="quiet-button" href={`/projects/${projectId}#generation`}>Back to project</Link></div>
             </aside>
           </div>
 
-          <div className="generation-footer"><div><span className="eyebrow">RUN STATUS</span><strong>{job.progressPercent}% · {stageLabels[job.stage]}</strong></div><div className="generation-footer-actions"><button className="quiet-button" type="button" disabled title="Video preview is unavailable for a simulation">No video preview</button><Link className="primary-button" href={`/projects/${projectId}#generation`}>Back to project<span aria-hidden="true">→</span></Link></div></div>
+          {job.videoAssetId && <section className="detail-panel generation-video-output" aria-labelledby="generated-video-title"><p className="eyebrow">FINAL OUTPUT</p><h2 id="generated-video-title">Generated video</h2>{videoPreview ? <video controls preload="metadata" src={videoPreview.url} aria-label="Generated video preview" /> : <p role="status">Preparing a private preview link…</p>}</section>}
+          <div className="generation-footer"><div><span className="eyebrow">RUN STATUS</span><strong>{job.progressPercent}% · {stageLabels[job.stage]}</strong></div><div className="generation-footer-actions">{job.videoAssetId ? videoPreview ? <a className="quiet-button" href={videoPreview.downloadUrl}>Download output</a> : <button className="quiet-button" type="button" disabled>Preparing preview…</button> : <button className="quiet-button" type="button" disabled title="Video preview is unavailable for a simulation">No video preview</button>}<Link className="primary-button" href={`/projects/${projectId}#generation`}>Back to project<span aria-hidden="true">→</span></Link></div></div>
         </> : null}
       </section>
       <footer className="workspace-footer"><span>© 2026 VideoGen</span><span>Ideas into stories.</span></footer>

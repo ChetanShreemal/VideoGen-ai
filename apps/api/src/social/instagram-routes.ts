@@ -52,11 +52,11 @@ const tokenResponseSchema = z.object({
 const profileResponseSchema = z.object({
   user_id: z.union([z.string(), z.number()]).optional(),
   username: z.string().min(1).optional(),
-  account_type: z.enum(["Business", "Media_Creator"]).optional(),
+  account_type: z.enum(["Business", "Media_Creator"]),
   data: z.array(z.object({
     user_id: z.union([z.string(), z.number()]).optional(),
     username: z.string().min(1).optional(),
-    account_type: z.enum(["Business", "Media_Creator"]).optional(),
+    account_type: z.enum(["Business", "Media_Creator"]),
   }).passthrough()).optional(),
 }).passthrough();
 
@@ -243,7 +243,7 @@ export async function registerInstagramRoutes(
         platform: "instagram",
         instagramUserId,
         username: instagramProfile.username,
-        ...(instagramProfile.account_type ? { accountType: instagramProfile.account_type } : {}),
+        accountType: instagramProfile.account_type,
         encryptedAccessToken: encryptAccessToken(longLived.access_token, currentConfig.encryptionKey),
         scopes,
         connectedAt: now,

@@ -258,6 +258,7 @@ export async function registerAssetRoutes(app: any, auth: AssetAuth, mongo: Mong
     if (!projectParams.success || !assetParams.success) return sendError(reply, 400, "VALIDATION_ERROR", "Asset ID is invalid.");
     const projectId = new ObjectId(projectParams.data.projectId);
     const assetId = new ObjectId(assetParams.data.assetId);
+    let verificationStage = "checking the upload";
     try {
       await ensureIndexes();
       const project = await projects.get(ownerUserId, projectId);
@@ -275,23 +276,29 @@ export async function registerAssetRoutes(app: any, auth: AssetAuth, mongo: Mong
         await discardUnverifiedAsset(assetId, ownerUserId, projectId);
         return sendError(reply, 404, "ASSET_NOT_FOUND", "Upload object was not found.");
       }
+      verificationStage = "reading uploaded-object metadata";
       const head = await inspectObject(verifyingAsset.uploadKey);
       if (!head.ETag) throw new Error("Uploaded object has no ETag.");
       if (head.ContentLength !== asset.sizeBytes || head.ContentType !== asset.contentType) {
         await discardUnverifiedAsset(assetId, ownerUserId, projectId);
         return sendError(reply, 400, "ASSET_UPLOAD_MISMATCH", "Uploaded file size or content type does not match the upload request.");
       }
+      verificationStage = "reading uploaded bytes from storage";
       const bytes = await readObject(verifyingAsset.uploadKey, head.ETag);
       if (bytes.byteLength !== asset.sizeBytes) {
         await discardUnverifiedAsset(assetId, ownerUserId, projectId);
         return sendError(reply, 400, "ASSET_UPLOAD_MISMATCH", "Uploaded file size does not match the upload request.");
       }
+      verificationStage = "inspecting video metadata";
       const media = await inspectMedia(asset, bytes);
+      verificationStage = "promoting the verified file in storage";
       await copyObject(verifyingAsset.uploadKey, asset.objectKey, asset.contentType, head.ETag);
       const now = new Date();
+      verificationStage = "saving verified asset metadata";
       await assets.updateOne({ _id: assetId, ownerUserId, projectId, status: "verifying" }, { $set: { status: "ready", sizeBytes: head.ContentLength, media, updatedAt: now }, $unset: { verificationStartedAt: "" } });
       const ready = await assets.findOne({ _id: assetId, ownerUserId, projectId, status: "ready" });
       if (!ready) return sendError(reply, 409, "ASSET_STATE_CONFLICT", "Asset state changed; retry completion.");
+      verificationStage = "removing the temporary upload";
       await deleteObject(verifyingAsset.uploadKey);
       await assets.updateOne({ _id: assetId, status: "ready", uploadKey: verifyingAsset.uploadKey }, { $unset: { uploadKey: "" } });
       return reply.send(assetCompletionResponseSchema.parse({ data: { asset: toResponse(ready) } }));
@@ -308,8 +315,8 @@ export async function registerAssetRoutes(app: any, auth: AssetAuth, mongo: Mong
         return sendError(reply, 400, "ASSET_VALIDATION_ERROR", error.message);
       }
       await assets.updateOne({ _id: assetId, ownerUserId, projectId, status: "verifying" }, { $set: { status: "pending", updatedAt: new Date() }, $unset: { verificationStartedAt: "" } }).catch(() => undefined);
-      request.log.error("Asset completion failed.");
-      return sendError(reply, 503, "ASSETS_UNAVAILABLE", "Asset verification is temporarily unavailable. Retry completion.");
+      request.log.error({ err: error, assetId: assetId.toHexString(), stage: verificationStage }, "Asset completion failed.");
+      return sendError(reply, 503, "ASSETS_UNAVAILABLE", `Asset verification failed while ${verificationStage}. Retry completion.`);
     }
   });
 

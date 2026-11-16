@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  apiErrorResponseSchema,
   assetCompletionResponseSchema,
   assetPreviewResponseSchema,
   assetUploadIntentResponseSchema,
@@ -78,7 +79,10 @@ export function ReferenceAssetsPanel({ projectId, active }: Props) {
           const stored = await fetch(intent.data.uploadUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
           if (!stored.ok) throw new Error("Cloud storage rejected the upload. Check the bucket CORS policy and retry.");
           const completeResponse = await fetch(`${apiBaseURL}/projects/${projectId}/assets/${intent.data.assetId}/complete`, { method: "POST", credentials: "include" });
-          if (!completeResponse.ok) throw new Error("The uploaded file could not be verified. Retry the upload.");
+          if (!completeResponse.ok) {
+            const payload = apiErrorResponseSchema.safeParse(await completeResponse.json().catch(() => null));
+            throw new Error(payload.success ? payload.data.error.message : `The uploaded file could not be verified (HTTP ${completeResponse.status}). Retry the upload.`);
+          }
           const result = assetCompletionResponseSchema.parse(await completeResponse.json());
           setAssets((current) => [result.data.asset, ...current.filter((item) => item.id !== result.data.asset.id)]);
           uploaded += 1;

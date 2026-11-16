@@ -71,9 +71,17 @@ export function InstagramPostDraftPanel({ projectId, revision }: { projectId: st
       if (!response.ok) throw new Error(response.status === 409 ? "This draft changed elsewhere. Reload the project and try again." : "Post draft could not be saved.");
       const item = instagramPostDraftResponseSchema.parse(await response.json()).data.item;
       setDrafts((current) => [item, ...current.filter((draft) => draft.id !== item.id)]);
-      setEditing(item.id); setMessage("Draft saved. It has not been published.");
+      if (updating) {
+        setEditing(item.id); setMessage("Draft changes saved. It has not been published.");
+      } else {
+        setEditing(""); setCaption(""); setMessage("Draft saved. It has not been published.");
+      }
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Post draft could not be saved."); }
     finally { setWorking(false); }
+  }
+
+  function startNewDraft() {
+    setEditing(""); setCaption(""); setPreviewUrl(""); setError(""); setMessage("");
   }
 
   function editDraft(item: InstagramPostDraft) {
@@ -102,8 +110,8 @@ export function InstagramPostDraftPanel({ projectId, revision }: { projectId: st
       {selected && <button className="quiet-button" type="button" disabled={working} onClick={() => void preview(selected)}>{previewUrl ? "Refresh video preview" : "Preview selected video"}</button>}
       {previewUrl && <video className="project-export-preview" src={previewUrl} controls playsInline preload="metadata" aria-label="Instagram post video preview" />}
       <label className="field"><span>Caption <small>{caption.length}/2,200</small></span><textarea maxLength={2200} rows={5} value={caption} onChange={(event) => setCaption(event.target.value)} placeholder="Write a caption for your video…" disabled={working} /></label>
-      <div className="instagram-draft-controls"><button className="primary-button" type="button" onClick={() => void saveDraft()} disabled={working || !selectedExport}>{working ? "Saving…" : editing ? "Save changes" : "Save draft"}</button><span>{connected ? "Instagram account connected" : "Connect a professional account before approving"}</span></div>
-      {drafts.length > 0 && <div className="instagram-drafts-list"><h3>Post drafts</h3>{drafts.map((item) => <article className="instagram-draft-card" key={item.id}>
+      <div className="instagram-draft-controls"><button className="primary-button" type="button" onClick={() => void saveDraft()} disabled={working || !selectedExport}>{working ? "Saving…" : editing ? "Save changes" : "Save draft"}</button>{editing && <button className="quiet-button" type="button" onClick={startNewDraft} disabled={working}>Cancel editing</button>}<span>{connected ? "Instagram account connected" : "Connect a professional account before approving"}</span></div>
+      {drafts.length > 0 && <div className="instagram-drafts-list"><div className="instagram-drafts-heading"><h3>Post drafts</h3><button className="quiet-button" type="button" onClick={startNewDraft} disabled={working || !editing}>New draft</button></div>{drafts.map((item) => <article className="instagram-draft-card" key={item.id}>
         <div><strong>{item.fileName}</strong><span className={`status-pill ${item.status === "approved" ? "instagram-connected-status" : ""}`}>{item.status === "approved" ? "APPROVED" : "DRAFT"}</span><small>{item.caption || "No caption yet"}</small><small>Updated {new Date(item.updatedAt).toLocaleString()}</small></div>
         <div className="project-export-actions"><button className="quiet-button" type="button" disabled={working} onClick={() => editDraft(item)}>Edit</button>{item.status === "draft" && <button className="quiet-button" type="button" disabled={working || !connected} onClick={() => void approveDraft(item)}>Approve for publishing</button>}</div>
       </article>)}</div>}

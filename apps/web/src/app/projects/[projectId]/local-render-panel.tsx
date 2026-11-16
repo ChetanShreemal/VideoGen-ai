@@ -249,8 +249,10 @@ export function LocalRenderPanel({ projectId, projectTitle, active, storyboard, 
     } catch (cause) {
       if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "The local video could not be rendered. Try again.");
     } finally {
-      if (abortRef.current === controller) abortRef.current = null;
-      if (!controller.signal.aborted) setProgress(null);
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+        setProgress(null);
+      }
     }
   }
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { generationJobEnvelopeSchema, generationVideoPreviewResponseSchema, type GenerationJob } from "@videogen/contracts";
 import { apiBaseURL, authClient } from "@/lib/auth-client";
 import { WorkspaceShell } from "../../../../workspace-shell";
@@ -28,6 +28,31 @@ export default function GenerationProgressPage() {
   const [error, setError] = useState("");
   const [refresh, setRefresh] = useState(0);
   const [videoPreview, setVideoPreview] = useState<{ url: string; downloadUrl: string; fileName: string } | null>(null);
+  const [localVideoPreview, setLocalVideoPreview] = useState("");
+  const [localVideoError, setLocalVideoError] = useState("");
+  const localVideoInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => () => { if (localVideoPreview) URL.revokeObjectURL(localVideoPreview); }, [localVideoPreview]);
+  useEffect(() => {
+    setLocalVideoPreview("");
+    setLocalVideoError("");
+  }, [projectId, jobId]);
+
+  async function previewDownloadedVideo(file?: File) {
+    setLocalVideoError("");
+    if (!file) return;
+    const maxBytes = 512 * 1024 * 1024;
+    if (file.size < 12 || file.size > maxBytes || (!file.type.includes("mp4") && !file.name.toLowerCase().endsWith(".mp4"))) {
+      setLocalVideoError("Choose an MP4 video under 512 MB.");
+      return;
+    }
+    const signature = await file.slice(4, 8).text();
+    if (signature !== "ftyp") {
+      setLocalVideoError("This file does not have a valid MP4 container signature.");
+      return;
+    }
+    setLocalVideoPreview((current) => { if (current) URL.revokeObjectURL(current); return URL.createObjectURL(file); });
+  }
 
   useEffect(() => {
     if (sessionPending) return;
@@ -117,7 +142,7 @@ export default function GenerationProgressPage() {
           <span className="upcoming"><span>04</span> Preview &amp; review</span>
         </nav>
 
-        {job?.simulated && <div className="generation-mode-note generation-disclosure"><span className="material-symbols-outlined" aria-hidden="true">info</span><span><strong>Development simulation only.</strong> The progress is persisted and real, but this run does not generate video files or create a preview asset.</span></div>}
+        {job?.simulated && <div className="generation-mode-note generation-disclosure"><span className="material-symbols-outlined" aria-hidden="true">info</span><span><strong>Development simulation only.</strong> The scene progress is simulated and this run does not create a video file. To compose one from this approved storyboard, use <Link href={`/projects/${projectId}#local-render-title`}>Local video export</Link>.</span></div>}
 
         {error && <div className="form-feedback error generation-error" role="alert"><span>{error}</span><button className="quiet-button" type="button" onClick={() => { setLoading(true); setRefresh((value) => value + 1); }}>Retry status check</button></div>}
         {loading && !job ? <div className="detail-panel generation-loading" role="status" aria-live="polite"><span className="material-symbols-outlined generation-loading-spinner" aria-hidden="true">progress_activity</span><div><strong>Loading your generation run</strong><p>Fetching the latest scene progress…</p></div></div> : job ? <>
@@ -149,7 +174,8 @@ export default function GenerationProgressPage() {
           </div>
 
           {job.videoAssetId && <section className="detail-panel generation-video-output" aria-labelledby="generated-video-title"><p className="eyebrow">FINAL OUTPUT</p><h2 id="generated-video-title">Generated video</h2>{videoPreview ? <video controls preload="metadata" src={videoPreview.url} aria-label="Generated video preview" /> : <p role="status">Preparing a private preview link…</p>}</section>}
-          <div className="generation-footer"><div><span className="eyebrow">RUN STATUS</span><strong>{job.progressPercent}% · {stageLabels[job.stage]}</strong></div><div className="generation-footer-actions">{job.videoAssetId ? videoPreview ? <a className="quiet-button" href={videoPreview.downloadUrl}>Download output</a> : <button className="quiet-button" type="button" disabled>Preparing preview…</button> : <button className="quiet-button" type="button" disabled title="Video preview is unavailable for a simulation">No video preview</button>}<Link className="primary-button" href={`/projects/${projectId}#generation`}>Back to project<span aria-hidden="true">→</span></Link></div></div>
+          {job.simulated && job.status === "completed" && !job.videoAssetId && <section className="detail-panel generation-video-output" aria-labelledby="local-video-preview-title"><p className="eyebrow">LOCAL FILE PREVIEW</p><h2 id="local-video-preview-title">Preview a downloaded MP4</h2><p className="detail-copy">Simulated generation has no output file. Select the MP4 you downloaded from Local video export to preview it here. This preview stays in this browser session and is not saved to the project.</p><input ref={localVideoInput} className="reference-file-input" type="file" accept="video/mp4,.mp4" onChange={(event) => void previewDownloadedVideo(event.currentTarget.files?.[0])} aria-label="Choose a downloaded MP4 to preview" />{localVideoError && <p className="form-feedback error" role="alert">{localVideoError}</p>}<button className="quiet-button" type="button" onClick={() => localVideoInput.current?.click()}>Choose MP4 from this device</button>{localVideoPreview && <video controls preload="metadata" playsInline src={localVideoPreview} aria-label="Downloaded local MP4 preview" />}</section>}
+          <div className="generation-footer"><div><span className="eyebrow">RUN STATUS</span><strong>{job.progressPercent}% · {stageLabels[job.stage]}</strong></div><div className="generation-footer-actions">{job.videoAssetId ? videoPreview ? <a className="quiet-button" href={videoPreview.downloadUrl}>Download output</a> : <button className="quiet-button" type="button" disabled>Preparing preview…</button> : job.simulated && job.status === "completed" ? <button className="quiet-button" type="button" onClick={() => localVideoPreview ? document.getElementById("local-video-preview-title")?.scrollIntoView({ behavior: "smooth" }) : localVideoInput.current?.click()}>{localVideoPreview ? "Open local preview" : "Choose MP4 to preview"}</button> : <button className="quiet-button" type="button" disabled title="Video preview is unavailable for this run">No video preview</button>}<Link className="primary-button" href={`/projects/${projectId}#generation`}>Back to project<span aria-hidden="true">→</span></Link></div></div>
         </> : null}
       </section>
       <footer className="workspace-footer"><span>© 2026 VideoGen</span><span>Ideas into stories.</span></footer>

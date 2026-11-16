@@ -121,7 +121,9 @@ export function LocalRenderPanel({ projectId, projectTitle, active, storyboard }
     ]).then(([images, narration]) => {
       if (controller.signal.aborted) return;
       setReferenceImages(images);
-      setNarrationAssets(narration.filter((asset) => asset.storyboardVersion === storyboard?.version));
+      const matchingNarration = narration.filter((asset) => asset.storyboardVersion === storyboard?.version);
+      setNarrationAssets(matchingNarration);
+      setNarrationAssetId((current) => current || matchingNarration[0]?.id || "");
     }).catch(() => {
       if (!controller.signal.aborted) setError("Saved media could not be loaded. You can still render without it.");
     }).finally(() => { if (!controller.signal.aborted) setMediaLoading(false); });
@@ -198,8 +200,9 @@ export function LocalRenderPanel({ projectId, projectTitle, active, storyboard }
     <p className="local-render-note">Up to {maxDurationSeconds} seconds · 30 fps · MP4/H.264 · keep this tab open while rendering</p>
     <div className="local-render-media-options">
       <label className="field"><span>Reference image <small>(optional)</small></span><select value={referenceImageId} disabled={mediaLoading || progress !== null} onChange={(event) => setReferenceImageId(event.target.value)}><option value="">No reference image</option>{referenceImages.map((asset) => <option value={asset.id} key={asset.id}>{asset.fileName}</option>)}</select></label>
-      <label className="field"><span>Saved narration <small>(optional)</small></span><select value={narrationAssetId} disabled={mediaLoading || progress !== null} onChange={(event) => setNarrationAssetId(event.target.value)}><option value="">No narration audio</option>{narrationAssets.map((asset) => <option value={asset.id} key={asset.id}>v{asset.storyboardVersion} · {asset.voiceName}</option>)}</select></label>
+      <label className="field"><span>Saved narration <small>(optional)</small></span><select value={narrationAssetId} disabled={mediaLoading || progress !== null} onChange={(event) => setNarrationAssetId(event.target.value)}><option value="">No narration · silent video</option>{narrationAssets.map((asset) => <option value={asset.id} key={asset.id}>v{asset.storyboardVersion} · {asset.voiceName}</option>)}</select></label>
       {mediaLoading && <small className="detail-copy">Loading this project’s saved media…</small>}
+      {!mediaLoading && narrationAssets.length === 0 && <small className="detail-copy">No saved narration for this storyboard version. Generate and save a narration preview above to include audio.</small>}
       <small className="detail-copy">The image is used as a subtle backdrop on each scene. Saved narration plays from the start and is clipped to the video duration.</small>
     </div>
     <p className="local-render-privacy">Remotion receives your IP address, this site’s domain and the render outcome for license accounting. It does not receive storyboard or media content.</p>

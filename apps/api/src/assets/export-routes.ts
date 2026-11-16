@@ -60,6 +60,7 @@ function toResponse(item: ExportDocument) {
 export async function registerExportRoutes(app: any, auth: ExportAuth, mongo: MongoDatabase, projects: ProjectRepository): Promise<void> {
   const exports: Collection<ExportDocument> = mongo.database().collection("projectExports");
   const quotaLocks: Collection<ExportQuotaLockDocument> = mongo.database().collection("exportQuotaLocks");
+  const socialPosts = mongo.database().collection<Document & { ownerUserId: string; projectId: ObjectId; exportId: ObjectId; status: string }>("social_posts");
   await exports.createIndex({ ownerUserId: 1, projectId: 1, status: 1, createdAt: -1 }, { name: "project_exports_list" });
   await exports.createIndex({ status: 1, intentExpiresAt: 1 }, { name: "project_exports_pending_cleanup" });
 
@@ -252,6 +253,9 @@ export async function registerExportRoutes(app: any, auth: ExportAuth, mongo: Mo
     try {
       const item = await exports.findOne({ _id: new ObjectId(exportParams.data.assetId), ownerUserId, projectId: new ObjectId(projectParams.data.projectId) });
       if (!item) return reply.status(204).send();
+      await socialPosts.updateMany({ ownerUserId, projectId: item.projectId, exportId: item._id, status: "approved" }, {
+        $set: { status: "draft", updatedAt: new Date() }, $inc: { revision: 1 }, $unset: { approvedAt: "", approvalSnapshot: "" },
+      });
       await removeObjectsAndRecord(item);
       return reply.status(204).send();
     } catch {

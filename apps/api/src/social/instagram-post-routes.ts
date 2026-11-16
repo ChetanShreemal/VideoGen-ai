@@ -103,12 +103,19 @@ export async function registerInstagramPostRoutes(app: FastifyInstance, auth: Re
       const projectId = new ObjectId(params.data.projectId); const postId = new ObjectId(params.data.postId);
       const project = await projects.get(ownerUserId, projectId);
       if (!project || project.status !== "active") return fail(reply, 404, "PROJECT_NOT_FOUND", "Active project was not found.");
-      const workspaceId = await projects.ensurePersonalWorkspace(ownerUserId);
-      if (!await accounts.findOne({ workspaceId, platform: "instagram", expiresAt: { $gt: new Date() } })) return fail(reply, 409, "INSTAGRAM_NOT_CONNECTED", "Connect a professional Instagram account before approving this post.");
       const item = await posts.findOne({ _id: postId, ownerUserId, projectId });
       if (!item) return fail(reply, 404, "INSTAGRAM_POST_NOT_FOUND", "Post draft was not found.");
+      if (!await resolveExport(ownerUserId, projectId, item.exportId)) {
+        if (item.status === "approved") {
+          await posts.updateOne({ _id: postId, ownerUserId, projectId, revision: item.revision, status: "approved" }, {
+            $set: { status: "draft", updatedAt: new Date() }, $inc: { revision: 1 }, $unset: { approvedAt: "", approvalSnapshot: "" },
+          });
+        }
+        return fail(reply, 409, "EXPORT_NOT_AVAILABLE", "The selected video is no longer available. Choose another export.");
+      }
       if (item.status === "approved") return reply.send(instagramPostDraftResponseSchema.parse({ data: { item: view(item) } }));
-      if (!await resolveExport(ownerUserId, projectId, item.exportId)) return fail(reply, 409, "EXPORT_NOT_AVAILABLE", "The selected video is no longer available. Choose another export.");
+      const workspaceId = await projects.ensurePersonalWorkspace(ownerUserId);
+      if (!await accounts.findOne({ workspaceId, platform: "instagram", expiresAt: { $gt: new Date() } })) return fail(reply, 409, "INSTAGRAM_NOT_CONNECTED", "Connect a professional Instagram account before approving this post.");
       const now = new Date(); const approvalSnapshot = `${item.exportId.toHexString()}\n${item.caption}`;
       const approved = await posts.findOneAndUpdate({ _id: postId, ownerUserId, projectId, revision: item.revision, status: "draft" }, {
         $set: { status: "approved", approvedAt: now, approvalSnapshot, updatedAt: now }, $inc: { revision: 1 },

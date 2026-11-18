@@ -113,15 +113,50 @@ export async function registerInstagramPostRoutes(app: FastifyInstance, auth: Re
         }
         return fail(reply, 409, "EXPORT_NOT_AVAILABLE", "The selected video is no longer available. Choose another export.");
       }
-      if (item.status === "approved") return reply.send(instagramPostDraftResponseSchema.parse({ data: { item: view(item) } }));
-      const workspaceId = await projects.ensurePersonalWorkspace(ownerUserId);
-      if (!await accounts.findOne({ workspaceId, platform: "instagram", expiresAt: { $gt: new Date() } })) return fail(reply, 409, "INSTAGRAM_NOT_CONNECTED", "Connect a professional Instagram account before approving this post.");
-      const now = new Date(); const approvalSnapshot = `${item.exportId.toHexString()}\n${item.caption}`;
-      const approved = await posts.findOneAndUpdate({ _id: postId, ownerUserId, projectId, revision: item.revision, status: "draft" }, {
-        $set: { status: "approved", approvedAt: now, approvalSnapshot, updatedAt: now }, $inc: { revision: 1 },
-      }, { returnDocument: "after" });
-      if (!approved) return fail(reply, 409, "STALE_REVISION", "This draft changed elsewhere. Reload it before approving.");
-      return reply.send(instagramPostDraftResponseSchema.parse({ data: { item: view(approved) } }));
+      if (item.status !== "approved") {
+        const workspaceId = await projects.ensurePersonalWorkspace(ownerUserId);
+        if (!await accounts.findOne({ workspaceId, platform: "instagram", expiresAt: { $gt: new Date() } })) return fail(reply, 409, "INSTAGRAM_NOT_CONNECTED", "Connect a professional Instagram account before approving this post.");
+      }
+
+      // Approval writes the export in the same transaction that changes the post.
+      // Deletion also writes this export before invalidating approvals, so the two
+      // operations serialize instead of allowing a post to approve after deletion.
+      const session = mongo.clientHandle().startSession();
+      let outcome: { type: "approved"; item: PostDocument } | { type: "export-unavailable" } | { type: "post-unavailable" } | { type: "stale" };
+      try {
+        outcome = await session.withTransaction(async () => {
+          const exportLock = await exports.updateOne(
+            { _id: item.exportId, ownerUserId, projectId, status: "ready" },
+            { $inc: { approvalRevision: 1 } },
+            { session },
+          );
+          if (exportLock.matchedCount === 0) {
+            return { type: "export-unavailable" as const };
+          }
+
+          const current = await posts.findOne({ _id: postId, ownerUserId, projectId }, { session });
+          if (!current) {
+            return { type: "post-unavailable" as const };
+          }
+          if (current.status === "approved") {
+            return { type: "approved" as const, item: current };
+          }
+
+          const now = new Date();
+          const approvalSnapshot = `${current.exportId.toHexString()}\n${current.caption}`;
+          const approved = await posts.findOneAndUpdate(
+            { _id: postId, ownerUserId, projectId, revision: current.revision, status: "draft" },
+            { $set: { status: "approved", approvedAt: now, approvalSnapshot, updatedAt: now }, $inc: { revision: 1 } },
+            { returnDocument: "after", session },
+          );
+          return approved ? { type: "approved" as const, item: approved } : { type: "stale" as const };
+        });
+      } finally { await session.endSession(); }
+
+      if (outcome.type === "export-unavailable") return fail(reply, 409, "EXPORT_NOT_AVAILABLE", "The selected video is no longer available. Choose another export.");
+      if (outcome.type === "post-unavailable") return fail(reply, 404, "INSTAGRAM_POST_NOT_FOUND", "Post draft was not found.");
+      if (outcome.type === "stale") return fail(reply, 409, "STALE_REVISION", "This draft changed elsewhere. Reload it before approving.");
+      return reply.send(instagramPostDraftResponseSchema.parse({ data: { item: view(outcome.item) } }));
     } catch { request.log.error("Instagram post draft could not be approved."); return fail(reply, 503, "INSTAGRAM_POSTS_UNAVAILABLE", "Instagram post could not be approved."); }
   });
 }

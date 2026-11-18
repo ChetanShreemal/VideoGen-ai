@@ -251,11 +251,28 @@ export async function registerExportRoutes(app: any, auth: ExportAuth, mongo: Mo
     const exportParams = assetIdParamsSchema.safeParse({ assetId: request.params?.assetId });
     if (!projectParams.success || !exportParams.success) return sendError(reply, 400, "VALIDATION_ERROR", "Export ID is invalid.");
     try {
-      const item = await exports.findOne({ _id: new ObjectId(exportParams.data.assetId), ownerUserId, projectId: new ObjectId(projectParams.data.projectId) });
+      const exportId = new ObjectId(exportParams.data.assetId);
+      const projectId = new ObjectId(projectParams.data.projectId);
+      const session = mongo.clientHandle().startSession();
+      let item: ExportDocument | null = null;
+      try {
+        await session.withTransaction(async () => {
+          const current = await exports.findOne({ _id: exportId, ownerUserId, projectId }, { session });
+          if (!current) return;
+          const now = new Date();
+          const claimed = await exports.updateOne(
+            { _id: current._id, ownerUserId, projectId, status: current.status },
+            { $set: { status: "deleting", updatedAt: now }, $unset: { verificationStartedAt: "" } },
+            { session },
+          );
+          if (claimed.matchedCount === 0) throw new Error("EXPORT_DELETE_STATE_CONFLICT");
+          await socialPosts.updateMany({ ownerUserId, projectId, exportId: current._id, status: "approved" }, {
+            $set: { status: "draft", updatedAt: now }, $inc: { revision: 1 }, $unset: { approvedAt: "", approvalSnapshot: "" },
+          }, { session });
+          item = current;
+        });
+      } finally { await session.endSession(); }
       if (!item) return reply.status(204).send();
-      await socialPosts.updateMany({ ownerUserId, projectId: item.projectId, exportId: item._id, status: "approved" }, {
-        $set: { status: "draft", updatedAt: new Date() }, $inc: { revision: 1 }, $unset: { approvedAt: "", approvalSnapshot: "" },
-      });
       await removeObjectsAndRecord(item);
       return reply.status(204).send();
     } catch {

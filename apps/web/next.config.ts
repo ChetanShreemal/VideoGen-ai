@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   experimental: {
     // Run Next.js build workers as threads because this Windows environment blocks child-process spawn.
     workerThreads: true,
+    agentUpgrade: "security",
   },
   // The project's prebuild script runs `tsc --noEmit`; skip Next's duplicate worker-based check.
   typescript: { ignoreBuildErrors: true },

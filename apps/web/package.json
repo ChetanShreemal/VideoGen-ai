@@ -16,7 +16,7 @@
     "@remotion/web-renderer": "4.0.543",
     "@videogen/contracts": "0.1.0",
     "better-auth": "^1.7.15",
-    "next": "^16.4.3",
+    "next": "16.4.6",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "remotion": "4.0.543"
